@@ -1,0 +1,57 @@
+---
+description: TypeScript standards for app and server code — type system, naming, error handling, architecture, testing, security. Owner of type-system rules; tanstack-query.mdc, tanstack-router.mdc, and vite-react-stack.mdc defer here for types.
+globs: **/*.{ts,tsx,d.ts}
+alwaysApply: false
+---
+
+# TypeScript standards
+
+## Type system
+
+- `interface` for object shapes; `type` for unions, intersections, mapped types.
+- Never `any`; use `unknown` and narrow with type guards or Zod.
+- `strict` mode always on — no exceptions.
+- Prefix React prop interfaces with the component name: `ButtonProps`, `ModalProps`.
+
+```ts
+// CORRECT: interface + Zod narrow from unknown
+interface UserProfile { id: string; name: string; }
+function parse(raw: unknown): UserProfile { return UserProfileSchema.parse(raw); }
+
+// WRONG: any silently bypasses the type system
+function parse(raw: any) { return raw; }
+```
+
+## Naming
+
+- PascalCase: types/interfaces/classes.
+- camelCase: values and functions.
+- UPPER_SNAKE_CASE: constants.
+- Co-locate types with components; shared types in `types/` modules.
+- Explicit return types on exported/public functions.
+
+## Functions and errors
+
+- `async/await`; early returns and guard clauses over nested conditions.
+- Extract helpers when a function exceeds ~20 lines or mixes concerns.
+- Custom error types for domain failures — not generic `Error` with string messages.
+- Never log passwords, tokens, or PII.
+
+## Architecture
+
+- Domain logic framework-agnostic where practical.
+- Repository/service boundaries for data access — no Supabase/DB details leaking into UI components.
+- TanStack Query for server/async state (see `tanstack-query.mdc`); Zustand for client UI state.
+- No Redux.
+
+## Testing
+
+- Mock external systems (API, DB, browser APIs), not internal business logic.
+- Factory functions over stale static fixtures.
+- Cover critical paths; meaningful assertions over coverage theater.
+
+## Security
+
+- Validate all external input with Zod at HTTP/API boundaries.
+- `helmet` and rate limiting on public server routes.
+- Never `@ts-ignore` security-relevant narrowing.

@@ -1,0 +1,40 @@
+---
+description: Quantitative factor research (A-share, HK, US equities) — alpha-discover/evaluate/mine/backtest/monitor/report. IC/ICIR/quintile analysis. Invoke by skill name or natural language when working in quant/, factors/, or backtest/ paths.
+globs: quant/**/*,**/factors/**/*,**/backtest/**/*
+alwaysApply: false
+---
+
+# Alpha Skills — Quantitative Factor Research
+
+Reference: [VernonOY/alpha-skills](https://github.com/VernonOY/alpha-skills/tree/main/skills)
+
+Markets: A-share (China), Hong Kong, US equities — trading rules adapt per market.
+
+## Skills
+
+| Skill | Purpose | Example prompt |
+|---|---|---|
+| **alpha-discover** | Design factors from natural language | "find me a low-volatility factor" |
+| **alpha-evaluate** | IC / ICIR / quintile / robustness | "evaluate reversal_5" |
+| **alpha-mine** | Automated mining with IC screening | "mine 50 factors" |
+| **alpha-library** | Factor registry and lifecycle | "show my factor library" |
+| **alpha-backtest** | Single- or multi-factor portfolio backtest | "backtest pv_diverge + turnover" |
+| **alpha-monitor** | IC decay and factor health | "check factor health" |
+| **alpha-report** | Comprehensive analysis report | "generate factor report" |
+
+## Defaults
+
+- Reproducible pipelines: explicit data ranges and universe definitions.
+- Report IC, ICIR, turnover, robustness — never just in-sample Sharpe alone.
+- Register factors in alpha-library before backtest comparison.
+- Flag look-ahead bias, survivorship bias, and overfitting when mining many factors.
+
+## Correct vs wrong
+
+```python
+# CORRECT: explicit universe + date range, report ICIR
+alpha_evaluate("reversal_5", universe="CSI500", start="2020-01-01", end="2024-12-31")
+
+# WRONG: no universe, no date range, Sharpe only
+alpha_evaluate("reversal_5")
+```

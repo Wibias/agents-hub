@@ -1,0 +1,22 @@
+---
+description: Gate — React Doctor findings on changed files must be fixed in the same session.
+globs: "**/*.{ts,tsx,js,jsx}"
+alwaysApply: false
+---
+
+# React Doctor Auto-Fix Gate
+
+**Applies only when:** React Doctor is configured in the project (a `doctor` script or React Doctor config exists) AND React Doctor results appear in context for changed files.
+
+When those conditions are met:
+
+1. Fix every reported finding on changed files before finishing the task.
+2. If the project provides a canonical recipe URL for the finding, fetch it — otherwise fix from the finding description and code context.
+3. Re-run the project-configured doctor command after fixes until it passes or only accepted debt remains.
+4. A finding is a confirmed false positive only when the code is intentional and the architectural reason is documented where the decision lives (ADR, code comment where it adds value). Do not add comments solely to silence a rule.
+
+`no-giant-component` means extract focused child components — do not silence the rule.
+
+## Relationship to Ponytail
+
+Ponytail (YAGNI, minimal code) applies to design choices before code exists. React Doctor findings on code already written are mandatory correctness gates, not optional refactors.

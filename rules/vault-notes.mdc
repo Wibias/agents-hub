@@ -1,0 +1,54 @@
+---
+description: Creation and maintenance rules for an Obsidian-compatible vault and hub memory notes.
+globs: ~/vault/**/*,~/.agents/memory/**/*
+alwaysApply: false
+---
+
+# Vault and note creation
+
+The vault is a curated knowledge base, not an automatic transcript sink. Prefer
+updating a durable existing page over creating another note.
+
+Adjust `globs` to your vault path if it is not `~/vault`.
+
+## SessionStart hook (optional)
+
+- A Codex (or similar) SessionStart hook may run `vault/.maintenance/check-due.ps1`
+  and inject overdue reminders only.
+- The hook must never open Obsidian, create notes, edit the vault, or mark a pass complete.
+- Obsidian does not need to be running; the vault is ordinary Markdown on disk.
+
+## When creation is allowed
+
+| Destination | Create or update only when |
+|---|---|
+| `vault/raw/` | The user explicitly captures/imports source material. Preserve it unchanged. |
+| `vault/entities/` | A compile finds durable raw evidence about one concrete person, product, client, company, or tool. |
+| `vault/concepts/` | A compile finds a reusable idea supported by raw material. |
+| `vault/research/` | A research sweep produces a dated, sourced, expiry-tagged result. |
+| `~/.agents/memory/notes/` | `extract-approach` passes its trigger gate; register in `MEMORY.md`. |
+
+Weekly lint repairs contradictions, duplicates, dead links, and stale indexes. Weekly
+synthesis updates existing knowledge and creates a page only when a genuinely new
+cross-source conclusion exists. Neither pass produces filler to prove it ran.
+
+## Create-vs-update gate
+
+Before creating any compiled page:
+
+1. Search `vault/INDEX.md`, then the matching entity/concept/research directory.
+2. If an existing page covers the subject, update it in place.
+3. Create a new page only when it has one distinct durable subject and supporting evidence.
+4. Add or update its one-line entry in `INDEX.md`.
+
+## Never create notes for
+
+- ordinary coding progress, status summaries, or chat transcripts
+- mechanical refactors, routine setup, or standard documented procedures
+- failed investigations with no validated conclusion
+- generic best practices already present in docs or rules
+- speculative ideas without a raw source or explicit user request
+- duplicate versions of an existing page
+
+Maintenance completion is recorded only after the pass succeeds (for example
+`vault/.maintenance/mark-done.ps1 -Pass <name>` when you use that tooling).

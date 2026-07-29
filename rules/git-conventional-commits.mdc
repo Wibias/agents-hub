@@ -1,0 +1,52 @@
+---
+description: Conventional Commits format — types, scopes, breaking changes, semver mapping. Apply when writing any git commit message.
+globs: ""
+alwaysApply: false
+---
+
+# Conventional Commits
+
+Spec: [conventionalcommits.org](https://www.conventionalcommits.org/)
+
+## Format
+
+```
+<type>[optional scope]: <description>
+
+[optional body]
+
+[optional footer(s)]
+```
+
+## Type -> semver
+
+| Type | When | Semver |
+|---|---|---|
+| `feat` | New feature | MINOR |
+| `fix` | Bug fix | PATCH |
+| `BREAKING CHANGE` | Breaking API/behavior change | MAJOR |
+
+Other types (no semver bump): `build`, `chore`, `ci`, `docs`, `style`, `refactor`, `perf`, `test`.
+
+## Rules
+
+- `type(optional-scope)[optional !]: description` — imperative, lowercase, no period.
+- `!` before colon marks breaking change: `feat(api)!: remove endpoint`.
+- `BREAKING CHANGE:` footer required when `!` is used in header.
+- `BREAKING CHANGE` must be uppercase; all other types are case-insensitive.
+
+## Correct vs wrong
+
+```
+# CORRECT
+feat(auth): add password reset email flow
+fix(ui): correct empty-state spacing on settings
+feat(api)!: require signed webhooks
+
+BREAKING CHANGE: unsigned webhook requests are rejected.
+
+# WRONG: vague, past tense, no type
+updated some stuff
+Fixed bug
+WIP: changes
+```

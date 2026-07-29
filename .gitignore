@@ -5,3 +5,11 @@ __pycache__/
 .DS_Store
 Thumbs.db
 node_modules/
+
+# Local episodic notes (keep MEMORY.md / README templates)
+memory/notes/
+
+# Generated knowledge indexes (rebuild with knowledge/build-index.mjs)
+knowledge/INDEX.md
+knowledge/index.json
+knowledge/design-references/

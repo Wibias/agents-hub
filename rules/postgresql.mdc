@@ -1,0 +1,56 @@
+---
+description: PostgreSQL and Supabase SQL — safe migrations, parameterized queries, indexing, RLS, transactions. Apply to all SQL files and Supabase config.
+globs: **/*.sql,**/migrations/**/*.sql,supabase/**/*
+alwaysApply: false
+---
+
+# PostgreSQL
+
+## Schema
+
+- `TIMESTAMPTZ` for all timestamps — never `TIMESTAMP` without time zone (silent data loss on DST).
+- UUID for public IDs; `BIGSERIAL` for internal keys where appropriate.
+- `NOT NULL` by default; nullable only when intentional.
+- Foreign keys with explicit `ON DELETE` behavior.
+- Check constraints for domain invariants.
+- Enable RLS on Supabase tables exposed to clients; scope policies by `auth.uid()` or service role.
+
+## Queries
+
+- **Parameterized queries always** — never string-interpolate user input into SQL (SQL injection).
+- Explicit columns — no `SELECT *` in application code.
+- `LIMIT` on potentially large result sets.
+- `EXPLAIN ANALYZE` before shipping complex queries.
+
+```sql
+-- CORRECT: parameterized, explicit columns
+SELECT id, name FROM users WHERE id = $1;
+
+-- WRONG: interpolated user input — SQL injection risk
+SELECT id, name FROM users WHERE id = '" || user_id || "';
+```
+
+## Indexes
+
+- Index foreign-key columns.
+- `CREATE INDEX CONCURRENTLY` on live tables (avoids table lock).
+- Partial indexes for frequently filtered subsets; drop unused indexes.
+
+## Migrations
+
+- Versioned migration files with descriptive names.
+- Multi-step backfills for large column additions.
+- Test rollback paths before deploy.
+
+## Transactions
+
+- Explicit transactions for multi-statement changes.
+- `statement_timeout` for long-running operations.
+- `SELECT ... FOR UPDATE` when row locking is required.
+
+## Hard forbidden
+
+- No string-interpolated SQL.
+- No schema changes during peak traffic without a staged plan.
+- No plaintext passwords stored in the database.
+- No `TRUNCATE` from application code.

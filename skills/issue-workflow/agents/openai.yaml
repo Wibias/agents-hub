@@ -1,0 +1,4 @@
+interface:
+  display_name: "Issue Workflow"
+  short_description: "PRDs, issues, triage, QA, refactor plans"
+  default_prompt: "Use -workflow to turn this plan into durable issues."

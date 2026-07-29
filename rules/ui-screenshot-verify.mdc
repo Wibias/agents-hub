@@ -1,0 +1,42 @@
+---
+description: Gate — no UI/layout task is done without live browser screenshot verification.
+globs: "**/*.{ts,tsx,js,jsx,html,vue,svelte,astro,css,scss,sass,less}"
+alwaysApply: false
+---
+
+# UI Screenshot Verification (Hard Gate)
+
+**Task is NOT complete** until screenshot verification passes for any user-visible change
+(layout, spacing, typography, colors, copy, modals, overlays, responsive breakpoints).
+
+## Required Before Final Response
+
+1. Navigate to every affected route using the available browser or Playwright tool (seed auth/state if needed).
+2. Capture a screenshot — desktop >=1280px; for grid/shell/column work also ~390px mobile.
+3. Inspect the screenshot and fix regressions in the same session.
+4. End with a `Screenshot-Check` line listing routes + viewports verified.
+
+```
+Screenshot-Check: /arena @1440px, @390px — header single-line, leaderboard readable.
+```
+
+## Blocked — Do Not Mark Done
+
+- Unit/typecheck/doctor green alone is not enough.
+- "Should work" without actually looking at a screenshot.
+- Skipping after a browser error without attempting recovery (reload, seed state, evaluate).
+- Omitting the Screenshot-Check line when UI files changed.
+
+## When No Browser Tool Is Available
+
+If no browser MCP or Playwright is available in the current environment, state this truthfully:
+`Screenshot-Check: BLOCKED — no browser/Playwright available in this environment.`
+Do NOT claim the check was performed. Mark the task incomplete for UI verification and hand off to the user or a capable agent.
+
+## Layout/Grid Extra
+
+After `col-span-*`, `@container`, `w-full`: confirm measured widths via evaluation or Playwright.
+
+## Relationship to Ponytail
+
+This gate is a minimum correctness requirement. Ponytail YAGNI does not apply here.

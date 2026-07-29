@@ -1,0 +1,4 @@
+interface:
+  display_name: "Security Review"
+  short_description: "Practical app and code security review"
+  default_prompt: "Use $security-review to audit this codebase for practical security risks."

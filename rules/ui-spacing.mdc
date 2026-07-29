@@ -1,0 +1,39 @@
+---
+description: >-
+  Obsessive spacing relationships for UI work - gaps, density, internal vs
+  external, alignment. Use when editing UI components, layouts, dashboards,
+  landing sections, CSS/Tailwind spacing, or when the user mentions spacing,
+  denseness, layout polish, or "looks almost right".
+globs: "**/*.{tsx,jsx,vue,svelte,css,scss,module.css}"
+alwaysApply: false
+---
+
+# UI spacing (relationship-first)
+
+**Learning:** bad spacing kills otherwise good design. Obsess over relationships,
+not one-off pixel values.
+
+## Hard rules
+
+1. **Internal < external** - padding inside a card/group must be less than the gap
+   between sibling cards/groups.
+2. **4/8 scale** - use the project spacing scale or 4/8 multiples only. No random
+   `17px` / `gap-[13px]` soup.
+3. **Proximity = meaning** - related controls sit closer than unrelated ones.
+   Section breaks get more air than item stacks.
+4. **Do not crush gaps to fit more content** - edit content, reflow, or paginate.
+5. **Sibling baselines** - parallel cards/columns share title/body/CTA baselines;
+   equal card height with CTA pinned bottom when comparing.
+6. **Gutter** - ordinary text never kisses the container edge.
+7. **Sticky chrome** - page content clears fixed nav/toolbars (padding, not overlap).
+
+## When polishing UI
+
+After structure/taste, run a dedicated spacing pass before calling it done.
+If work needs "a couple more revs", list remaining spacing relationship fails
+explicitly - do not ship with major density/alignment debt.
+
+## Not this rule
+
+- Brand taste / anti-slop systems → project design skills or docs (not in this hub yet)
+- Project-specific chrome or design tokens → that project's own UI rules
