@@ -4,9 +4,12 @@ description: >-
   Structures git workflow and semantic versioning practices for every code
   change. Use when committing, branching, resolving conflicts, or organizing
   work across parallel streams; and when cutting a release, choosing a semver
-  bump, tagging, or writing a changelog. Distinct from setup-pre-commit
-  (hook installation); this skill owns the commit discipline, branching strategy,
-  versioning contract, and changelog authoring that apply to all code work.
+  bump, tagging, or writing a changelog. Do not use for: PR babysit/watch,
+  CodeRabbit/Codex review loops, or GitHub merge ceremony (use shipping-github).
+  Distinct from setup-pre-commit (hook installation) and
+  superpowers:using-git-worktrees (worktree mechanics); this skill owns the
+  commit discipline, branching strategy, versioning contract, and changelog
+  authoring that apply to all code work.
 ---
 
 # Git Workflow and Versioning
