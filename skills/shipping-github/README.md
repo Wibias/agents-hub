@@ -31,7 +31,8 @@ Thin babysit skills (Cursor built-in, OpenAI `babysit-pr`, Claude marketplace co
 | Windows comment mojibake (`Run` → `�un`) | UTF-8 file + `gh --input` / `--body-file` (never PowerShell string pipes) |
 | Markdown `\_` spam in comments | Backticks for identifiers; no backslash-escaping |
 | Agent spam on GitHub | No auto-replies to humans without your exact text; limited thread resolves; inline replies in-thread |
-| Flaky CI “fixed” by rewriting tests | Classify branch vs flake; retry flakes (budget); don’t weaken CI |
+| Vague “looks good / CI green” reviews | **`comment-depth.md`** — research, security, verdict, merge-ready, status with paths/SHAs/evidence |
+| Flaky CI “fixed” by rewriting tests | Classify carefully — **don’t** weaken CI; **do** harden real test timeouts instead of burning reruns |
 | Draft / WIP merged by accident | Hard gates before merge-ready claims or merge; draft→ready only after ask |
 | Rate-limit thrash on dense polls | Composio GraphQL rate limit → `gh` fallback; backoff |
 | Bare `gh pr merge` skips ceremony | Why-it-helps on PR; **thank issue author** even after `Fixes` auto-close; never done without that |
@@ -64,7 +65,7 @@ Concrete evidence scripts (see `references/gate-helpers.md`):
 | `scripts/codeowners-for-pr.mjs` | Map PR files → CODEOWNERS on base + review requests |
 | `scripts/review-threads.mjs` | Paginate GraphQL unresolved review threads (+ optional resolve) |
 | `scripts/pr-policy-gate.mjs` | Code-owner **enforcement**, dismiss-stale / last-push approvals, merge queue / `merge_group` warn |
-| `scripts/watch-wake-gate.mjs` | **Watch only:** exit `1` while unacked OWNER/MEMBER top-level comments exist — forbids “waiting on CI/CodeRabbit” |
+| `scripts/watch-wake-gate.mjs` | Exit `1` until a **non-merge** commit addresses OWNER comments **and** PR is not DIRTY/BEHIND — ACK-only does not clear |
 
 ### Watch ordering (hard)
 
