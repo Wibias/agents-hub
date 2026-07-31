@@ -64,7 +64,7 @@ Read `references/shared-rules.md` before acting. Non-negotiables:
 6. Mode-aware waits — merge-ready / full-review / babysit-fix: **until green+comments clean** (or hard blocker); never quit on “3 rounds / 20m”; never invent soft “maintainer ack” stops; **thin settle** (~3–5 min quiet + recheck) before merge-ready / `approve-comment`; watch: continue past green until merged/closed/blocker (**merge-queue queued ≠ merged**).
 7. Behind base + **compile against tip** — update from base, then verify build/tests on tip before merge-ready / full-review approve / merge. After push: re-check **stale approvals / last-push** policy.
 8. Draft/WIP/do-not-merge — never merge or claim ready while gated.
-9. Prefer in-PR fixes; merge only on merge workflow (thank PR + issue authors, no self-thanks; auto-close issues when fixed). **Stacked → `manage-stacked-prs`** (never merge mid-stack as if it were trunk).
+9. Prefer in-PR fixes; merge only on merge workflow (thank PR + **issue authors**, no self-thanks; auto-close issues when fixed). **Never** `gh pr merge` without the issue-thank step when `closingIssuesReferences` / `Fixes #N` exist. **Stacked → `manage-stacked-prs`** (never merge mid-stack as if it were trunk).
 10. Create-PR: need-to-fix preflight; **one PR** unless explicit batch; **canonical repo only** (never fork-only deliverable); verify `Fixes #N` link; **assign @me** on the issue; **one** idempotent issue comment (edit if incomplete — never a second cut-off comment).
 11. Research posts findings + priority + security relevance; ask to run + **post** security review when possible/likely (exploit details chat-only; public posts redacted).
 12. Merge-ready paths (`fix-pr-bots`, create-PR, full-review when posting merge-ready) **must** run own **bug + security + Spec/Standards** — not bots-only. Other PR flows: security cue → ask. Public disclosure always; changelog/commit/semver → `git-workflow-and-versioning`; final evidence sweep before ready claims.
@@ -73,6 +73,7 @@ Read `references/shared-rules.md` before acting. Non-negotiables:
 15. Merge-ready only when bots/humans are clear **and** own bug+security+spec reviews are done **and** thin settle elapsed; also post/edit one notify on each **linked issue** (not only on the PR). Unresolved GraphQL review threads block ready.
 16. Status verdicts must use the **same** merge-ready bar (no looser read-only “ready”). Watch milestones ≠ merge-ready.
 17. Draft→ready only after asking; inline replies in-thread; subagent checkout preflight; post-merge cleanup; backport only after ask; rate-limit backoff via Composio then gh; bare `#N` disambiguation; compose handoffs for stacks/split/finish/issue-workflow/git-workflow; CODEOWNERS **enforcement** vs suggestion-only.
+18. **>3 PRs (or research issues) in one ask → subagent fan-out** (one target per subagent, parallel/chunked) — never serialize large batches in the parent.
 
 ## Tooling
 

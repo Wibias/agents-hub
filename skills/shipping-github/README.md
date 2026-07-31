@@ -23,6 +23,7 @@ Shipping a PR is rarely one green check. It’s a grind of:
 | Duplicate PRs / fork-only PRs / comment spam | Create-PR: one PR unless batch asked; canonical repo only; verify link + assign self; edit comments never double-post |
 | Bot + human review ping-pong | Triage owners/maintainers first, then bots; **own bug + security + Spec/Standards**; keep going until merge-ready |
 | Soft “needs maintainer ack” while CI is red | Soft opinions are **not** stop conditions; babysit until green / hard blocker |
+| 4+ PRs babysat one-by-one (too slow) | **>3 PRs/issues → subagent fan-out** (one per target, parallel/chunked) |
 | Green on a stale base | Update from base, then **compile against tip** before ready / approve / merge |
 | False merge-ready with open threads | GraphQL `reviewThreads` must be clear; linked-issue notify when ready is posted |
 | CI green, bots still arriving | **Thin settle** (~3–5 min quiet + recheck) before merge-ready / approve-comment |
@@ -41,7 +42,7 @@ Shipping a PR is rarely one green check. It’s a grind of:
 | Flaky CI “fixed” by rewriting tests | Classify branch vs flake; retry flakes (budget); don’t weaken CI |
 | Draft / WIP merged by accident | Hard gates before merge-ready claims or merge; draft→ready only after ask |
 | Rate-limit thrash on dense polls | Composio GraphQL rate limit → `gh` fallback; backoff |
-| Merge without closing the social loop | Thanks + why-it-helps on the PR; thank the **issue** author; auto-close when linked |
+| Merge without closing the social loop | Thanks + why-it-helps on the PR; thank the **issue** author (even after auto-close); never bare `gh pr merge` |
 
 Shared rules live in one place (`references/shared-rules.md`): scope lock, git safety (no force-push, stop on dirty trees), evidence sweep before “ready.”
 
