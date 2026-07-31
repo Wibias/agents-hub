@@ -8,6 +8,40 @@ Read this before every `shipping-github` workflow.
 - Do not drive-by refactor, rename for taste, or expand scope.
 - Never edit CI workflows/checks just to make failures pass.
 - If a merge-blocking failure looks unrelated, update from the default base branch first; if still broken and out of scope, report and stop expanding.
+- If scope **explodes** (should be multiple reviewable PRs): **stop** and hand off to skill `split-to-prs` — do not silently batch-create.
+
+## Resolve `#N` (issue vs PR)
+
+When the user writes bare `#N` / a number list without saying “issue” or “PR”:
+
+1. Try both: `gh issue view N --repo OWNER/REPO` and `gh pr view N --repo OWNER/REPO`.
+2. If **only one** exists → use that.
+3. If **both** exist → **stop and ask** which they meant (do not guess).
+4. Defaults when the verb is clear: research/create/assign → **issue**; fix/watch/status/merge/full-review/re-review → **PR**.
+5. Always pass `--repo OWNER/REPO` from the issue/PR URL or `gh repo view` — never assume cwd remote is correct when the user pasted a different repo.
+
+## Comment / review routing
+
+| Intent | Where to post |
+|---|---|
+| Issue conversation / research / opened-PR / merge-ready-on-issue | Issue comments API / `gh issue comment` / `--body-file` |
+| PR conversation (merge-ready, verdict, thanks) | PR conversation = `issues/.../comments` / `gh pr comment` / `--body-file` |
+| Reply to a **diff/line review** comment | In-thread reply only (`…/pulls/{pr}/comments/{id}/replies` or Composio reply tool) |
+| Approve / request changes / comment-as-review | `gh pr review` (not a substitute for conversation comments) |
+
+Never use a top-level PR conversation comment as a substitute for an inline review reply.
+
+## Compose with other skills (do not reinvent)
+
+| Situation | Hand off to |
+|---|---|
+| Stacked PRs (restack / retarget / merge bottom-up) | `manage-stacked-prs` |
+| Split oversized branch into reviewable PRs | `split-to-prs` |
+| Commit messages, semver bump, changelog **authoring**, release tagging | `git-workflow-and-versioning` |
+| After ship: worktree cleanup / “finish this branch” menu | `finishing-a-development-branch` |
+| File PRDs / vertical slices / agent briefs (not tip-research) | `issue-workflow` |
+| Spec + Standards axes | `review` |
+| Thin CI stub only | Cursor `babysit` (optional; this skill owns the full loop) |
 
 ## Git safety
 
@@ -72,11 +106,104 @@ Visible GitHub actions must not impersonate the user.
 | Patch + push code | Allowed when the workflow is a fix/watch/create flow |
 | Reply on **bot** threads | Allowed when declining/skipping or noting a fix; prefix with `[shipping-github]` |
 | Reply on **human** threads | **Forbidden** unless the user confirms the **exact** reply text first |
+| Inline review-thread replies | Prefer **in-thread** replies (below), never a top-level PR comment that duplicates the thread |
 | Resolve review threads | Only after the fix is verified, and only for: (a) threads from the user who requested this run, or (b) trusted bot threads you addressed. Do **not** resolve other humans’ threads that others participated in without asking |
 | Approve / request changes | Only per the active review workflow; never approve unless asked |
-| Draft / ready / close / reopen PR | Never unless the user explicitly asks (merge workflow may close **issues** after merge) |
+| Draft / ready / close / reopen PR | Never convert draft→ready or ready→draft unless the user explicitly asks (see **Draft → ready**). Merge workflow may close **issues** after merge |
 
 If you disagree with a human comment or it needs a written answer: explain in **chat**, suggest a reply, wait for confirmation.
+
+### Inline review replies (not top-level)
+
+When the feedback lives on a **diff/line review comment**, reply **in that thread**:
+
+```bash
+# Prefer Composio when connected (session from COMPOSIO_SEARCH_TOOLS):
+# GITHUB_CREATE_A_REPLY_FOR_A_REVIEW_COMMENT — comment_id = thread root
+#   (use in_reply_to_id of a reply, else the comment's own id)
+
+# gh fallback:
+gh api "repos/OWNER/REPO/pulls/PR/comments/COMMENT_ID/replies" -f body="$(cat body.md)"
+# or: POST with --input payload.json (UTF-8 file pattern)
+```
+
+Do **not** post a new top-level PR conversation comment that says the same thing. Human-thread exact-text confirmation still applies.
+
+## Draft → ready
+
+If the user asked for **merge-ready / full-review / merge** and the PR is still a GitHub **draft** (or WIP/do-not-merge):
+
+1. Do **not** silently stop forever and do **not** auto-mark ready.
+2. Keep fixing comments/CI as allowed, but **ask once** in chat:
+
+   > PR #N is still a draft / WIP. Convert to ready-for-review so we can claim merge-ready?
+
+3. Only run `gh pr ready N` (or equivalent) after they say yes.
+4. If they say no: continue fixes; verdict stays `gated` / blocked until the gate clears.
+
+## Subagent preflight (bug + security)
+
+Before launching `bugbot` / `security-review` / `review-bugbot` / `review-security`:
+
+1. **Checkout** the PR head (or named branch) locally. If checkout fails because of dirty files: **ask** before stash; only stash after user confirms.
+2. Prompt shape must include `Full Repository Path` + `Diff: branch changes` (default) unless they asked uncommitted-only.
+3. If the subagent fails with **empty / uncomputable diff**: retry **once** with `Diff: natural language` + a per-file `Change Description` (bugbot path). Security helper may not support NL diff — report and fall back to a manual bug/security pass in-chat.
+4. Wrong invocation (missing path/diff): fix and retry once. Same unexplained failure twice → stop and report; do not loop.
+5. After findings: triage and **fix** what belongs in this PR (merge-ready / full-review / create-PR). Do not only summarize unless the user asked review-only.
+
+## Spec + standards axis
+
+For **full-review** and **create-PR** (before merge-ready claim), also run or hand off a **Spec + Standards** check:
+
+- Prefer skill **`review`** (Standards + Spec subagents against the PR base / merge-base) when available.
+- Spec source: linked issue / PRD / `Fixes #N` body. If none: note “no spec” and skip Spec axis.
+- Standards source: repo `AGENTS.md` / `CONTRIBUTING` / ADRs / linters already noted — do not re-litigate machine-enforced lint.
+- Fix in-PR violations that are necessary/useful; skip pure style nits already covered by CI.
+
+If `review` is unavailable: do a short in-session pass (does the diff match the issue? any clear CONTRIBUTING/ADR breaks?) and say so.
+
+## Rate-limit backoff (Composio → gh)
+
+GitHub throttles API calls. **GraphQL** is GitHub’s query API (one request can fetch many fields; quota is **points**/hour). You do not need to write GraphQL by hand for most ship work — prefer `gh` REST helpers — but rate-limit checks often use GraphQL.
+
+**Before dense poll loops** (watch / fix wait / multi-PR batch) and after any `403`/`429` / “rate limit” error:
+
+1. **Prefer Composio MCP** when the GitHub toolkit is connected:
+
+   - Discover via `COMPOSIO_SEARCH_TOOLS` (use_case: check GitHub GraphQL rate limit).
+   - Execute `GITHUB_GET_GRAPHQL_RATE_LIMIT` via `COMPOSIO_MULTI_EXECUTE_TOOL`.
+   - If `remaining` is low (e.g. < 200 points) or reset is soon: **sleep until reset** (or at least 30–60s with exponential backoff), then continue. Do not busy-poll.
+
+2. **Fallback without Composio:**
+
+   ```bash
+   gh api rate_limit --jq ".resources | {core,graphql,search}"
+   # or GraphQL:
+   gh api graphql -f query='query { rateLimit { limit remaining resetAt used } }'
+   ```
+
+3. On `gh`/`api` 403/429: read `X-RateLimit-Reset` / error message, wait until reset (+ a few seconds), retry once. Cap retries; if still limited, hard-stop and report.
+4. Watch cadence stays ~1–2 min when green; **stretch** polls when remaining quota is low.
+5. CodeRabbit/bot “rate limited” summaries are separate — still triage open threads; do not treat bot rate-limit as agent API rate-limit.
+
+## Post-merge cleanup
+
+After a successful `merge-pr` (and after `manage-stacked-prs` lands a stack bottom into trunk):
+
+1. Confirm the PR shows **merged**.
+2. Confirm linked issues auto-closed (or close explicitly per merge workflow).
+3. **Delete the head branch** when same-repo and safe: `gh pr merge` already may delete if repo setting on; else `gh api -X DELETE repos/OWNER/REPO/git/refs/heads/BRANCH` / `git push origin --delete BRANCH` only if the user didn’t ask to keep it and it’s not a shared long-lived branch.
+4. If this PR was a **stack parent**: hand off to `manage-stacked-prs` to **retarget/restack children** before deleting the parent branch.
+5. Report merge URL + issue states + whether branch was deleted.
+
+## Backport / release branch
+
+When research (or the user) finds **fixed on development tip but not on release/default**:
+
+1. Do **not** silently open a backport PR.
+2. Ask once: “Fixed on `dev` (SHA/PR). Want a backport PR onto `<release-branch>`?”
+3. If yes: create **one** canonical backport PR (same create-PR rules: link issue if still open, or note cherry-pick of SHA), then merge-ready loop.
+4. Prefer cherry-pick of the fix commit(s) onto the release branch; resolve conflicts carefully; compile-against that release tip.
 
 ## Push → wait → recheck (mode-aware stops)
 
@@ -86,13 +213,35 @@ If you disagree with a human comment or it needs a written answer: explain in **
 
 | Mode | Keep going until | Hard stop (report, don’t pretend done) |
 |---|---|---|
-| **Fix / create → merge-ready** (`fix-pr-bots`, create-PR cleanup) | Each targeted PR is merge-ready (or draft/WIP gated with an explained blocker) | Permissions / dirty unrelated tree / push rejected / flake retry budget exhausted on required checks / product decision / human reply needs confirmation / user interrupt. **Do not** stop just because “3 rounds” or “20 minutes” passed. **Do not** stop for soft “needs maintainer ack” while CI/comments are still fixable |
+| **Fix / create → merge-ready** (`fix-pr-bots`, create-PR cleanup) | Each targeted PR is merge-ready (or draft/WIP gated with an explained blocker) | Permissions / **fork-head unwritable** / dirty unrelated tree / push rejected / flake retry budget exhausted on required checks / product decision / human reply needs confirmation / user interrupt / **stacked trunk merge needs `manage-stacked-prs`**. **Do not** stop just because “3 rounds” or “20 minutes” passed. **Do not** stop for soft “needs maintainer ack” while CI/comments are still fixable |
 | **Full review** (`full-review-pr`) | Each targeted PR has a valid verdict **and** required CI green (or hard blocker / `not-useful` / draft-only `gated`) | Same hard blockers. Soft security opinions ≠ stop |
 | **Watch** (`watch-pr`) | PR merged/closed (green+mergeable is a milestone — keep watching for new comments) | Same hard blockers, or user stop |
 | **Re-review** | Concerns re-checked and fixed or changes-requested | Same hard blockers |
-| **Status** | One snapshot — no wait loop | — |
+| **Status** | One snapshot — no wait loop; verdict **cannot be looser** than merge-ready bar | — |
 
 If the user named **several** existing PRs (“full review these”, “babysit these”, “make 778–782 merge ready”), keep working **each** until that mode’s done condition or a hard blocker — same no-early-exit rule. That is not “creating” a batch; it’s finishing open PRs they listed.
+
+**Batch tip race:** before each PR’s merge-ready / approve claim, re-check behind-base + compile-against-tip on **that** PR — base may have moved while you fixed an earlier one.
+
+**Single writer:** do not run watch + fix-pr merge-ready posting concurrently on the same PR in a way that double-posts; one workflow owns the `[shipping-github] Merge ready` comment.
+
+## Thin settle window (before merge-ready / approve-comment)
+
+Do **not** post `[shipping-github] Merge ready`, linked-issue merge-ready notify, or full-review `approve-comment` on a **single** green+quiet snapshot. Late CodeRabbit/Codex rounds often land 1–5 minutes after CI turns green.
+
+**Applies to:** `fix-pr-bots`, create-PR cleanup → merge-ready, full-review when posting `approve-comment` / merge-ready.
+
+**Does not apply to:** `status` (one-shot snapshot), watch milestones (“still watching”), `changes-requested` / `not-useful` / draft `gated`, or merge itself (merge still uses the full evidence sweep; settle was already required if you just claimed ready).
+
+**Procedure:**
+
+1. Note the timestamp of the **last observable change** on this head: push / new review comment or submission / check status change / thread resolve / draft→ready.
+2. When the evidence sweep would otherwise allow ready: **wait ~3–5 minutes** of quiet (prefer **~4 min** default), then re-run a light recheck (`review-threads.mjs` + required CI / `pr-policy-gate` as needed).
+3. **Any** new activity during the window **resets** the quiet clock — fix/push/re-triage, then settle again.
+4. Cap: after **two** full settle windows (~8–10 min total quiet attempts) with no new useful threads and green required CI, post ready. Do **not** hang forever waiting for hypothetical bots. Do **not** invent soft “maintainer ack” stops during settle.
+5. If a bot **in-progress** signal is visible (e.g. eyes reaction / “review in progress” comment) and no completion yet: stretch the **first** settle toward ~**5–10 min** once, then proceed with ready if still clean — or keep looping if new comments arrived. This is a cooling-off judgment, not a guarantee no review is coming.
+
+Watch mode already keeps polling after quiet; settle is only for the **claim** that the PR is merge-ready / approve-worthy.
 
 ## CI — branch fix vs flake
 
@@ -113,12 +262,25 @@ Classify failed **required** checks before patching:
 - Prefer failed-**job** logs as soon as a job fails; don’t wait for the whole workflow if logs are already available.
 - When both actionable review fixes and flaky retries apply: **fix+push first** (new SHA retriggers CI); don’t rerun flakes on a SHA you’re about to replace.
 
+## Merge policy extras
+
+Before merge / merge-ready claims, also watch for:
+
+- **Required labels** (repo rules / `ready` / semver labels) — if missing, block and say which.
+- **Auto-merge** already enabled — report “auto-merge queued”; watch until **actually merged**, don’t stop at queued.
+- **Merge queue / merge group** — wait for queue success; don’t claim merged early.
+- **Dependabot / Renovate** authors — still apply tip-compile + CI + review bar; prefer minimal dependency-bump scope; link advisory when present; don’t drive-by unrelated upgrades.
+- **Squash merge:** ensuring `Fixes #N` lives in the **PR body** (commit trailers are lost on squash).
+- **Private GHSA / advisory IDs:** keep details chat-only; public posts stay redacted (no advisory exploit detail).
+- **Team required reviewers** (org teams): treat pending the same as CODEOWNERS pending.
+
 ## Authority
 
 - **Default:** do not merge, do not approve, do not close the issue.
 - **Merge** only on the merge workflow / explicit merge ask.
 - **Request changes** when a review workflow finds real, necessary fixes.
-- After a successful merge, follow merge workflow issue thank + close steps.
+- After a successful merge, follow merge workflow issue thank + close steps + **Post-merge cleanup**.
+- Explicit user override (“merge anyway”) may skip own-review evidence only if they clearly insist after you warn.
 
 ## Branches
 
@@ -168,25 +330,180 @@ For changelog **content**, semver bump choice, and release tagging, follow `git-
 
 ## Final evidence sweep
 
-Before claiming merge-ready (or ending a successful watch milestone):
+Before claiming merge-ready (or reporting a watch **CI/review milestone**), also load `references/gate-helpers.md` when CI, CODEOWNERS, threads, or merge-queue policy may block.
 
-1. Fresh `gh pr view` (SHA, draft/gate, mergeable, required checks, `reviewDecision`, behind-base)
+1. Fresh `gh pr view` (SHA, draft/gate, mergeable, required checks, `reviewDecision`, behind-base, `isCrossRepository` / head repo)
 2. Confirm head is **up to date with base** and **compiles/tests against tip** (local gate and/or green required CI on that SHA)
-3. Unresolved **published** review threads (humans + bots). Count open threads; sample bodies.
-4. Local `git status` (report dirty files left untouched)
+3. Run **Required checks + review gate** + **`scripts/pr-policy-gate.mjs`** (code-owner enforcement, stale approvals, merge queue)
+4. Unresolved **published** review threads via **`scripts/review-threads.mjs`** (paginate GraphQL). Rate-limited bot “SUCCESS” ≠ threads clean.
+5. **Stack check** (below) — if mid-stack, do not treat as trunk-ready without `manage-stacked-prs`
+6. Local `git status` (report dirty files left untouched)
+7. **Thin settle window** (above) — for merge-ready / `approve-comment` claims only: quiet elapsed + one recheck (or two-window cap). Status / watch milestones skip this.
 
 **Do not post merge-ready** if any of these still hold:
 
 - Behind base, conflicted, or broken compile/tests against current tip
 - Unresolved useful human or bot threads (CodeRabbit/Codex/Bugbot/etc.) that were not fixed **or** explicitly declined on-thread with rationale
 - Required CI red (or flake budget exhausted without a clear “out of scope / infra” hard-blocker report instead of merge-ready)
+- Branch-protection / reviewDecision / CODEOWNERS (when **enforced**) / required labels still blocking
+- Stale approvals after push when dismiss-stale / last-push-approval is on and head has no fresh approval
+- In merge queue but not yet **merged** (queued ≠ done for watch/merge claims)
 - `CHANGES_REQUESTED` still in force from a trusted reviewer
 - Draft / WIP / do-not-merge gate
-- Own bug/security blockers unfixed (merge-ready / full-review paths)
+- Own bug/security/**spec-standards** blockers unfixed (merge-ready / full-review / create-PR paths)
+- PR is stacked on another open PR and user asked to merge into trunk (hand off — do not fake ready)
+- Settle window not yet elapsed (or reset by new activity) on a merge-ready / `approve-comment` path — one green snapshot is not enough
 
-“CI green” alone is **not** merge-ready. Green on a **stale** SHA while behind tip is **not** merge-ready. A rate-limited bot summary is **not** “bots clean.”
+“CI green” alone is **not** merge-ready. Green on a **stale** SHA while behind tip is **not** merge-ready. A rate-limited bot summary is **not** “bots clean.” Approvals on an **old** SHA are **not** approvals on tip when dismiss-stale / last-push rules apply. A single quiet snapshot without settle is **not** merge-ready.
+
+**Watch milestones** may say only “CI/reviews quiet — still watching (not full merge-ready bar)” unless own bug+security+spec were already completed this session via fix-pr/full-review. Never post `[shipping-github] Merge ready` from watch alone. If `isInMergeQueue`: report queue position/state and keep watching until merged/closed.
 
 When merge-ready **is** valid, also notify linked issues (see `fix-pr-bots`).
+
+## Required checks + review gate (concrete)
+
+Before merge-ready / full-review `approve-comment` / merge / status “merge-ready” verdict:
+
+1. **Prefer helper** (modern `checks[]` + legacy `contexts` + rulesets + live rollup):
+
+   ```bash
+   node "<shipping-github>/scripts/required-checks.mjs" OWNER/REPO N
+   # see references/gate-helpers.md
+   ```
+
+2. **Manual fallback** on the **current** head SHA:
+
+   ```bash
+   gh pr checks N --repo OWNER/REPO
+   gh pr view N --repo OWNER/REPO --json statusCheckRollup,mergeStateStatus,reviewDecision,isDraft,baseRefName,headRefName,headRepository,isCrossRepository,reviewRequests
+   ```
+
+3. **Branch protection** (best-effort — may 404 without admin):
+
+   ```bash
+   gh api "repos/OWNER/REPO/branches/BASE/protection" \
+     --jq "{strict:.required_status_checks.strict, contexts:.required_status_checks.contexts, checks:.required_status_checks.checks, reviews:.required_pull_request_reviews}"
+   ```
+
+   - **Legacy:** `required_status_checks.contexts` — string job/context names.
+   - **Modern:** `required_status_checks.checks` — objects with `context` (+ optional `app_id`). Treat each `context` as a required name.
+   - Merge both lists; a required name is green only when a live check with that **exact name** is success/neutral/skipped.
+
+4. **Rulesets** (often replace classic protection):
+
+   ```bash
+   gh api "repos/OWNER/REPO/rules/branches/BASE"
+   ```
+
+   Collect `required_status_checks` rule parameters (`context` fields). Union with protection names.
+
+5. If **no** required list is readable: fall back to `mergeStateStatus` (`BLOCKED` / `UNSTABLE` / `BEHIND`) **plus** clearly failing always-on matrix jobs. Do not invent “all green.”
+
+6. **Review decision:** `reviewDecision` of `CHANGES_REQUESTED` blocks. Empty/`REVIEW_REQUIRED` with open CODEOWNER or required-reviewer requests blocks merge-ready unless status-only (label blocked).
+
+7. **CODEOWNERS** — path map + **enforcement** (below / `pr-policy-gate.mjs`). Suggestion-only CODEOWNERS ≠ hard block unless `reviewDecision` / pending required requests say otherwise; enforced code-owner reviews **do** block.
+
+8. **Stale approvals / last-push** — after every push to the PR head, re-run `pr-policy-gate.mjs`. If `dismissesStaleReviews` or `requireLastPushApproval` is on, approvals must cover the **current** `headRefOid`. Do not claim merge-ready on tip with only pre-push approvals.
+
+9. **Review threads** — run `scripts/review-threads.mjs` (below). Unresolved useful threads block merge-ready.
+
+10. Status / chat must name **which** required jobs are red/pending (backticks), not “CI failing.”
+
+## Review threads (GraphQL)
+
+`gh pr view` does **not** expose `reviewThreads`. Always use GraphQL (helper preferred):
+
+```bash
+node "<shipping-github>/scripts/review-threads.mjs" OWNER/REPO N
+```
+
+Manual pagination sketch:
+
+```bash
+gh api graphql -f query='
+query($o:String!,$r:String!,$n:Int!,$a:String){
+  repository(owner:$o,name:$r){
+    pullRequest(number:$n){
+      reviewThreads(first:100, after:$a){
+        pageInfo{hasNextPage endCursor}
+        nodes{id isResolved isOutdated path line
+          comments(first:10){nodes{databaseId body author{login}}}}
+      }
+    }
+  }
+}' -F o=OWNER -F r=REPO -F n=N
+```
+
+Reply in-thread (REST replies or `addPullRequestReviewThreadReply`). Resolve with `resolveReviewThread` / helper `--resolve PRRT_…` **only** when shared social policy allows.
+
+## Merge queue
+
+When `isMergeQueueEnabled` / `isInMergeQueue` (from `pr-policy-gate.mjs` or GraphQL):
+
+1. **Queued ≠ merged.** Watch/merge flows keep going until the PR is actually merged/closed (or dequeued with a blocker).
+2. Prefer merging via the queue when the base requires it (`gh pr merge` may enqueue).
+3. If queue is enabled but local `.github/workflows` never mention `merge_group`, **warn**: required checks that only run on `pull_request` often stall the queue. Do not “fix” by inventing workflow edits unless the user asked — report the gap.
+4. Auto-merge + merge queue: still wait for **merged** state, not merely “entry created.”
+
+## Stale approvals / last-push
+
+After **any** push that changes `headRefOid`:
+
+1. Run `scripts/pr-policy-gate.mjs`.
+2. If dismiss-stale or last-push-approval is enabled and there is no approval on the new SHA: merge-ready is blocked; say who needs to re-approve.
+3. Do not treat `reviewDecision: APPROVED` as tip-fresh without checking approval commits vs head when those rules are on.
+
+## CODEOWNERS path automation
+
+Do not rely only on the Files-changed UI hover.
+
+1. **Prefer helper:**
+
+   ```bash
+   node "<shipping-github>/scripts/codeowners-for-pr.mjs" OWNER/REPO N
+   ```
+
+   It loads CODEOWNERS from the **PR base** (`.github/CODEOWNERS` → root → `docs/`), maps each changed file to owners (last matching rule wins), unions owners, lists `reviewRequests`, and surfaces `GET …/codeowners/errors?ref=BASE`.
+
+2. **Manual fallback:**
+
+   ```bash
+   gh api "repos/OWNER/REPO/codeowners/errors?ref=BASE"
+   gh api "repos/OWNER/REPO/contents/.github/CODEOWNERS?ref=BASE" --jq .content
+   # decode base64; also try /CODEOWNERS and /docs/CODEOWNERS
+   gh api "repos/OWNER/REPO/pulls/N/files" --paginate --jq '.[].filename'
+   gh pr view N --repo OWNER/REPO --json reviewRequests,reviewDecision
+   ```
+
+3. Pending CODEOWNER / team review requests block when enforcement is on **or** `reviewDecision`/`REVIEW_REQUIRED` applies. Use `pr-policy-gate.mjs` to distinguish **enforced** vs suggestion-only CODEOWNERS.
+4. Syntax errors in CODEOWNERS: report; do not pretend owners are complete.
+5. Always pair path mapping (`codeowners-for-pr.mjs`) with enforcement detection (`pr-policy-gate.mjs`).
+
+## Fork head / push permission
+
+When the PR head is on a **fork** (`isCrossRepository: true` / `headRepository` ≠ canonical):
+
+1. Check whether you can push: `maintainerCanModify` on the PR, or push rights to the head fork.
+2. If a normal `git push` to the PR head is rejected / you lack write access: **hard stop**. Report: cannot push fixes to fork head; ask the author to enable “Allow edits from maintainers,” push themselves, or recreate as a same-repo branch.
+3. Do **not** open a parallel fork-only “fix” PR as the deliverable. Do **not** pretend merge-ready while required fixes cannot be pushed.
+4. Same-repo heads with rejected push (branch protection, missing rights): same hard stop — ask the user; never force-push.
+
+## Stacked PRs
+
+If the PR’s `baseRefName` is itself an open PR head (or the user says “stack” / “stacked”):
+
+1. **Do not** merge mid-stack into trunk with `merge-pr` alone.
+2. Stop mutating stack order/bases yourself unless the user asked for stack ops.
+3. **Hand off** to skill `manage-stacked-prs` (inspect → restack/retarget → merge bottom-up). Tell the user the stack order.
+4. Fix/review/status on a single stacked PR may continue (comments/CI on that PR), but label clearly: “ready relative to parent branch, **not** trunk” until the stack skill lands it.
+
+Detect quickly:
+
+```bash
+gh pr list --repo OWNER/REPO --state open --limit 100 --json number,headRefName,baseRefName,url
+# If this PR's baseRefName equals another open PR's headRefName → stacked
+```
+
 
 ## One PR at a time (no silent batches)
 
