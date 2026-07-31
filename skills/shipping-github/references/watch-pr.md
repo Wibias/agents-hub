@@ -23,28 +23,73 @@ Do **not** merge unless they also asked to merge (then hand off to `merge-pr` on
 - Default: one PR.
 - If the user lists **>3** PRs to watch/babysit: fan out with **subagents** (shared **Multi-PR fan-out**). ≤3 may stay in the parent.
 
+## Hard ordering (do not invert)
+
+**Reviews → then base update if needed → then CI/bots.** Never the reverse.
+
+### Mandatory script (every wake)
+
+```bash
+node "<shipping-github>/scripts/watch-wake-gate.mjs" OWNER/REPO N
+```
+
+- **Exit `1` / `canWait: false`:** you are **forbidden** to say you are waiting on CI, `windows-latest`, CodeRabbit, or Codex. Triage `blockers[]` (OWNER/MEMBER/COLLABORATOR top-level comments) first — patch/rebase/drop overlap, then either a **non-merge** commit or post:
+
+  ```markdown
+  [shipping-github] Addressed owner feedback — <one line what changed>
+  ```
+
+- **Exit `0`:** CI/bot wait is allowed.
+- Re-run this script after every push and before every progress heartbeat.
+
+This exists because prose “reviews first” was ignored in live watches. **The exit code is the rule.**
+
+### Forbidden (instant fail)
+
+These progress lines are **illegal** while the wake-gate exits `1`:
+
+- “up to date with `dev`; waiting on CI / windows-latest”
+- “waiting on CodeRabbit / Codex”
+- “tip is current; polling until green”
+
+Owner guidance is often a **top-level PR conversation comment** (not an inline review thread). The wake-gate script fetches those; `review-threads.mjs` alone is **not** enough.
+
+### Wake gate checklist
+
+1. Run `watch-wake-gate.mjs` — if exit `1`, handle blockers; stop.
+2. Also list unresolved **inline** threads (`review-threads.mjs`).
+3. Only if human/owner queue is clear: tip-update if behind, then CI classify/fix/wait, then bot triage.
+
+CodeRabbit/Codex pending is **lower priority** than an open owner comment.
+
 ## Loop
+
+On **every** poll / wake (including the first):
 
 1. Identify PR (`#N`, URL, or current branch) — resolve bare `#N` per shared rules. Checkout head if fixing.
 2. Apply git safety (dirty tree / no force-push / fork-head unwritable → hard stop).
-3. Snapshot: draft/WIP gates, behind-base/conflicts, required CI + review gate (`required-checks` + `pr-policy-gate`), unresolved threads (`review-threads.mjs`), stack/fork/auto-merge/**merge-queue** flags.
-4. **Reviews first:** triage per shared rules (owners/trusted first). Patch+push actionable items. Human written replies → chat confirm. Inline replies in-thread. Resolve only allowed threads after verified fixes (`review-threads --resolve` only when policy allows).
-5. **CI:** classify branch vs flake. Fix branch-related; rerun flakes (max 3 / SHA); stop on exhausted infra failures. After push: re-check stale-approval / last-push via `pr-policy-gate`.
-6. If behind/conflicted: update from base, resolve or ask, push; verify compile-against-tip when updating.
-7. Security-offer / changelog nudge once if applicable.
-8. If green + mergeable + useful threads quiet on **current** SHA: report milestone **“CI/reviews quiet — still watching (not full merge-ready bar)”** (stacked: “quiet vs parent — not trunk”). Do **not** post `[shipping-github] Merge ready` from watch alone. Keep polling while open. If auto-merge **or merge-queue** queued: watch until **actually merged** (report queue position/state from `pr-policy-gate`).
-9. Stop only when:
+3. Snapshot + **run `scripts/watch-wake-gate.mjs`** (exit `1` → handle owner blockers; do not idle). Also: draft/WIP, behind-base, required CI, `review-threads.mjs`, stack/fork/queue flags.
+4. Run **Wake gate** path above. Fail → handle reviews; do not idle.
+5. **Reviews first (mandatory):** triage per shared rules — **CODEOWNERS / owners / maintainers first**, then other humans, then bots.
+   - Patch+push actionable items (narrow scope / drop work already on tip / rebase per owner note).
+   - Human written replies → chat confirm. Inline replies in-thread. Resolve only allowed threads after verified fixes.
+6. **Then** if behind/conflicted: update from base, resolve or ask, push; verify compile-against-tip. Prefer combining with review fixes in the **same** push.
+7. **Then CI:** classify branch vs flake. Fix branch-related; rerun flakes (max 3 / SHA); stop on exhausted infra failures. After push: re-check stale-approval / last-push via `pr-policy-gate`.
+8. Security-offer / changelog nudge once if applicable.
+9. Only if green + mergeable + **useful threads/comments quiet** on **current** SHA: report milestone **“CI/reviews quiet — still watching (not full merge-ready bar)”**. Do **not** post `[shipping-github] Merge ready` from watch alone. Keep polling while open. If auto-merge **or merge-queue** queued: watch until **actually merged**.
+10. Stop only when:
    - PR **merged** or **closed**, or
    - Hard blocker (permissions, fork-head unwritable, dirty unrelated tree, push rejected, flake budget exhausted, product decision, human reply needs confirmation, stack needs `manage-stacked-prs` for trunk, merge-queue stuck with `merge_group` CI gap), or
    - User interrupts / asks to stop.
 
 ## Cadence
 
-- CI pending/failing: poll ~1 minute (longer if rate-limit remaining is low — shared **Rate-limit backoff**).
+- **Open actionable reviews:** act immediately; do not burn the poll interval “waiting for CI” or “waiting for CodeRabbit.”
+- CI pending/failing **and** wake gate clear: poll ~1 minute (longer if rate-limit remaining is low).
 - Before dense multi-PR / watch polls: check Composio `GITHUB_GET_GRAPHQL_RATE_LIMIT` (or `gh api rate_limit` / GraphQL `rateLimit`).
-- CI green, PR still open: keep polling at a practical interval (~1–2 minutes) for new reviews/conflicts — don’t abandon the watch.
-- On any change (new SHA, check flip, new comment): reset and act; re-verify tip freshness before repeating milestone language.
-- Heartbeat only on status **changes**, not every identical green poll.
+- CI green, PR still open: keep polling (~1–2 minutes) for new reviews/conflicts.
+- On any change (new SHA, check flip, **new comment**): reset to wake gate; **re-run reviews-first**.
+- Heartbeat only when wake gate is clear **and** status changed — never a wait line that skips owner triage.
 
 ## Done when
 
@@ -54,3 +99,4 @@ Do **not** merge unless they also asked to merge (then hand off to `merge-pr` on
 
 Never treat a single green snapshot as the end of babysitting while the PR is still open.
 Never equate a watch milestone with merge-ready unless `fix-pr-bots` / `full-review-pr` already completed the full bar this session.
+Never report “waiting for CI/CodeRabbit” while unresolved owner/CODEOWNER/top-level trusted-human comments remain.

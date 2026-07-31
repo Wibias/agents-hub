@@ -1,27 +1,29 @@
 ---
 name: shipping-github
 description: >
-  Use when the user asks to research one or more GitHub issues on the latest
-  development branch (still broken? fixed? open PR? duplicate? security
-  relevance? priority — then comment on the issue), fix CodeRabbit/Codex or
-  human/owner review comments on a PR, watch/monitor a PR’s CI and new reviews
-  until merged/closed, check PR status / what's left, make a PR merge-ready,
-  re-review a PR, create a merge-ready PR for an issue only after need-to-fix
-  preflight, run a full bug/security review with verdict, run a security review,
-  request changes, or merge a PR with thanks and issue close-out. Also use when
-  a PR description mentions security or API and the agent should ask whether to
-  run a security review. Do not use for: local unit-test debugging with no
-  GitHub PR, filing PRDs/issue breakdowns (use issue-workflow), or Agent Skill
-  authoring/skill-ratchet. Differentiator: Cursor babysit is a thin conflict/CI
-  stub — this skill owns the full GitHub ship loop plus continuous watch;
-  issue-workflow files tracker artifacts; git-workflow-and-versioning owns
-  commit/semver/changelog authoring (this skill only nudges missing entries).
+  Primary skill for babysit / watch / monitor GitHub PRs, make merge-ready,
+  fix CodeRabbit/Codex/owner comments, research issues on latest development,
+  create linked PRs, full bug+security review, status, and merge with thanks.
+  Prefer this over Cursor’s built-in babysit (~/.cursor/skills-cursor/babysit):
+  that stub only does conflicts/CI and will merge-dev-then-wait — wrong.
+  Use when the user says babysit, watch PR, monitor CI, keep an eye on a PR,
+  make merge ready, research issue #N, create PR for issue, full review, or
+  merge PR. Watch MUST run scripts/watch-wake-gate.mjs every wake (exit 1 =
+  fix OWNER comments before any CI/CodeRabbit idle). Do not use for: local
+  unit-test debugging with no GitHub PR, filing PRDs (issue-workflow), or
+  skill authoring (skill-ratchet).
 ---
 
 # Shipping GitHub
 
 Ship GitHub issues and PRs: researched, reviewed, CI-clean, merge-ready — or
 merged when asked. Optional **watch** mode keeps monitoring after green.
+
+**Conflict with Cursor built-in `babysit`:** that skill lives in
+`~/.cursor/skills-cursor/babysit` and **reinstalls** if deleted. It is a thin
+conflict/CI stub. For this user, always prefer **this skill** (and the personal
+`babysit` redirect under `overrides/babysit` / `~/.agents/skills/babysit`). Never
+run the built-in-only loop.
 
 ## Route
 
@@ -60,8 +62,8 @@ Read `references/shared-rules.md` before acting. Non-negotiables:
 2. Git safety — stop on dirty unrelated trees; never force-push; stop if push rejected; **fork-head unwritable → hard stop** (shared rules).
 3. Review triage — trusted owners/maintainers first; published feedback only; verify bots against code.
 4. Social mutation — no auto-replies to humans without exact-text confirmation; limited thread resolves.
-5. CI classify — branch fix vs flake; max 3 flaky reruns per SHA; use **Required checks + review gate** (`scripts/required-checks.mjs`, `scripts/pr-policy-gate.mjs`, `scripts/review-threads.mjs`, `scripts/codeowners-for-pr.mjs`).
-6. Mode-aware waits — merge-ready / full-review / babysit-fix: **until green+comments clean** (or hard blocker); never quit on “3 rounds / 20m”; never invent soft “maintainer ack” stops; **thin settle** (~3–5 min quiet + recheck) before merge-ready / `approve-comment`; watch: continue past green until merged/closed/blocker (**merge-queue queued ≠ merged**).
+5. CI classify — branch fix vs flake; max 3 flaky reruns per SHA; use **Required checks + review gate** (`scripts/required-checks.mjs`, `scripts/pr-policy-gate.mjs`, `scripts/review-threads.mjs`, `scripts/codeowners-for-pr.mjs`, `scripts/watch-wake-gate.mjs` on watch).
+6. Mode-aware waits — merge-ready / full-review / babysit-fix: **until green+comments clean** (or hard blocker); never quit on “3 rounds / 20m”; never invent soft “maintainer ack” stops; **thin settle** (~3–5 min quiet + recheck) before merge-ready / `approve-comment`; watch: **every wake run `watch-wake-gate.mjs`** — exit `1` means fix OWNER comments, never “waiting on CI/CodeRabbit”; then tip-update; then CI (**merge-queue queued ≠ merged**).
 7. Behind base + **compile against tip** — update from base, then verify build/tests on tip before merge-ready / full-review approve / merge. After push: re-check **stale approvals / last-push** policy.
 8. Draft/WIP/do-not-merge — never merge or claim ready while gated.
 9. Prefer in-PR fixes; merge only on merge workflow (thank PR + **issue authors**, no self-thanks; auto-close issues when fixed). **Never** `gh pr merge` without the issue-thank step when `closingIssuesReferences` / `Fixes #N` exist. **Stacked → `manage-stacked-prs`** (never merge mid-stack as if it were trunk).
@@ -80,7 +82,7 @@ Read `references/shared-rules.md` before acting. Non-negotiables:
 - Prefer `gh` for GitHub reads/writes.
 - Detect the repo default branch; do not hardcode `main`.
 - Cross-use thin helpers when helpful: `review-bugbot`, `review-security`, skill `review` (Spec+Standards), `manage-stacked-prs`, `split-to-prs`, `finishing-a-development-branch`, `git-workflow-and-versioning`, `issue-workflow`.
-- **Gate helpers:** `scripts/required-checks.mjs`, `scripts/codeowners-for-pr.mjs`, `scripts/review-threads.mjs`, `scripts/pr-policy-gate.mjs` (see `references/gate-helpers.md`).
+- **Gate helpers:** `scripts/required-checks.mjs`, `scripts/codeowners-for-pr.mjs`, `scripts/review-threads.mjs`, `scripts/pr-policy-gate.mjs`, `scripts/watch-wake-gate.mjs` (see `references/gate-helpers.md`).
 - **Rate limits:** prefer Composio MCP `GITHUB_GET_GRAPHQL_RATE_LIMIT` when GitHub toolkit is connected; else `gh api rate_limit` / `gh api graphql` `rateLimit` (see shared rules).
 - **Inline replies:** Composio `GITHUB_CREATE_A_REPLY_FOR_A_REVIEW_COMMENT` or `gh api …/pulls/{pr}/comments/{id}/replies`.
 

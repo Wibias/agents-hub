@@ -66,5 +66,17 @@
   {
     "id": "R-merge-issue-thanks-2026-07-31",
     "sha256": "d9746345081a3642c5a1919972061bc2ebcdd894b63f53b8ec9f4e5c9aceffe7"
+  },
+  {
+    "id": "R-watch-reviews-before-ci-2026-07-31",
+    "sha256": "af8b8b5e64b7d5d23ee4358350767016a6094a3280dcf56f240370c7235bb465"
+  },
+  {
+    "id": "R-watch-no-wait-coderabbit-2026-07-31",
+    "sha256": "06268fea87d5d17d01028a92e2c015aabe28c014db9213540dcd950b17308ecc"
+  },
+  {
+    "id": "R-watch-wake-gate-script-2026-07-31",
+    "sha256": "eb99620f4c3c1f7084022c858e7f455c2c52fcdb64561180c9e8f2d6d546e9be"
   }
 ]
