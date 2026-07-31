@@ -27,14 +27,19 @@ Block **merge** (and do not post a final “Ready to merge” claim) when any of
 
 Report the gate and stop that step. Fix/review may continue, but say merge-ready is blocked until the gate clears.
 
-## Behind base + conflicts
+## Behind base + compile against tip
 
-Before declaring merge-ready or merging:
+`mergeable` / green CI on an **old SHA** is not enough. Before merge-ready, full-review approve, or merge:
 
-1. Check whether the PR head is behind its base / default branch and whether it has conflicts.
-2. If behind or conflicted: update from the base (merge or rebase per repo norm). Preserve intent; if intents conflict, stop and ask.
-3. Push the update, then recheck reviews + CI.
-4. Never claim merge-ready or merge while conflicted or knowingly stale behind a required base update.
+1. Check whether the PR head is behind its base (often `dev`) and whether it has conflicts.
+2. If behind or conflicted: **update from the base** (merge or rebase per repo norm). Preserve intent; if intents conflict, stop and ask.
+3. After the update (or if already up to date): verify the branch **still builds against current base tip**:
+   - Prefer the repo’s normal local gate for this change (typecheck / compile / focused tests / project CLI).
+   - Then push and wait for **required CI on the new SHA**.
+4. If it no longer compiles or tests fail **because of base drift**: fix in this PR (adapt to tip APIs) or hard-block with evidence — do **not** claim merge-ready / approve / merge.
+5. Never claim merge-ready or merge while conflicted, behind base, or failing compile/tests against current tip.
+
+Applies to: `fix-pr-bots`, `full-review-pr`, `create-pr-for-issue`, `re-review-pr`, `merge-pr`, and `watch-pr` when auto-fixing.
 
 ## Review triage (humans + bots)
 
@@ -81,12 +86,13 @@ If you disagree with a human comment or it needs a written answer: explain in **
 
 | Mode | Keep going until | Hard stop (report, don’t pretend done) |
 |---|---|---|
-| **Fix / create → merge-ready** (`fix-pr-bots`, create-PR cleanup) | Each targeted PR is merge-ready (or gated with an explained blocker) | Permissions / dirty unrelated tree / push rejected / flake retry budget exhausted on required checks / product decision / human reply needs confirmation / user interrupt. **Do not** stop just because “3 rounds” or “20 minutes” passed |
+| **Fix / create → merge-ready** (`fix-pr-bots`, create-PR cleanup) | Each targeted PR is merge-ready (or draft/WIP gated with an explained blocker) | Permissions / dirty unrelated tree / push rejected / flake retry budget exhausted on required checks / product decision / human reply needs confirmation / user interrupt. **Do not** stop just because “3 rounds” or “20 minutes” passed. **Do not** stop for soft “needs maintainer ack” while CI/comments are still fixable |
+| **Full review** (`full-review-pr`) | Each targeted PR has a valid verdict **and** required CI green (or hard blocker / `not-useful` / draft-only `gated`) | Same hard blockers. Soft security opinions ≠ stop |
 | **Watch** (`watch-pr`) | PR merged/closed (green+mergeable is a milestone — keep watching for new comments) | Same hard blockers, or user stop |
 | **Re-review** | Concerns re-checked and fixed or changes-requested | Same hard blockers |
 | **Status** | One snapshot — no wait loop | — |
 
-If the user named **several** existing PRs (“babysit these”, “make 778–782 merge ready”), keep working **each** until merge-ready or a hard blocker — same no-early-exit rule. That is not “creating” a batch; it’s finishing open PRs they listed.
+If the user named **several** existing PRs (“full review these”, “babysit these”, “make 778–782 merge ready”), keep working **each** until that mode’s done condition or a hard blocker — same no-early-exit rule. That is not “creating” a batch; it’s finishing open PRs they listed.
 
 ## CI — branch fix vs flake
 
@@ -145,12 +151,14 @@ Applies to research comments, security-review posts, and request-changes text. W
 
 ## Security review offer (PR description cue)
 
-When touching a PR (fix, re-review, merge, status, watch, or any flow that loads the PR body) and security review is **not** already required by that workflow:
+**Already mandated (do not ask — just run):** `fix-pr-bots` (make merge-ready), `create-pr-for-issue`, `full-review-pr`, and any explicit security ask.
+
+When touching a PR in a workflow that does **not** already mandate security (`re-review-pr`, `merge-pr`, `status`, `watch-pr`, etc.):
 
 1. Scan title + description for security/API cues (`security`, `secure`, `api`, `apis`, plus cousins like `auth`, `oauth`, `token`, `secret`, `credential`, `cors`, `xss`, `csrf`, `cve`, `vulnerability`, `encrypt`).
 2. If matched, **ask once:** “This PR description mentions security/API. Run a security review too?”
 3. Run `references/security-review.md` only if they say yes.
-4. Skip if already requested, mandated (`full-review-pr`, `create-pr-for-issue`), or declined this session.
+4. Skip if already requested, mandated above, or declined this session.
 
 ## Changelog / release-note nudge
 
@@ -162,18 +170,21 @@ For changelog **content**, semver bump choice, and release tagging, follow `git-
 
 Before claiming merge-ready (or ending a successful watch milestone):
 
-1. Fresh `gh pr view` (SHA, draft/gate, mergeable, required checks, `reviewDecision`)
-2. Unresolved **published** review threads (humans + bots). Count open threads; sample bodies.
-3. Local `git status` (report dirty files left untouched)
+1. Fresh `gh pr view` (SHA, draft/gate, mergeable, required checks, `reviewDecision`, behind-base)
+2. Confirm head is **up to date with base** and **compiles/tests against tip** (local gate and/or green required CI on that SHA)
+3. Unresolved **published** review threads (humans + bots). Count open threads; sample bodies.
+4. Local `git status` (report dirty files left untouched)
 
 **Do not post merge-ready** if any of these still hold:
 
+- Behind base, conflicted, or broken compile/tests against current tip
 - Unresolved useful human or bot threads (CodeRabbit/Codex/Bugbot/etc.) that were not fixed **or** explicitly declined on-thread with rationale
 - Required CI red (or flake budget exhausted without a clear “out of scope / infra” hard-blocker report instead of merge-ready)
 - `CHANGES_REQUESTED` still in force from a trusted reviewer
 - Draft / WIP / do-not-merge gate
+- Own bug/security blockers unfixed (merge-ready / full-review paths)
 
-“CI green” alone is **not** merge-ready. A rate-limited bot summary is **not** “bots clean.”
+“CI green” alone is **not** merge-ready. Green on a **stale** SHA while behind tip is **not** merge-ready. A rate-limited bot summary is **not** “bots clean.”
 
 When merge-ready **is** valid, also notify linked issues (see `fix-pr-bots`).
 
@@ -197,9 +208,38 @@ When opening a PR for an issue:
 For any `[shipping-github]` comment intent on an issue or PR (opened-PR notice, research review, security review, merge-ready, etc.):
 
 1. Before posting, look for an existing comment **you** authored with the same intent prefix on that thread.
-2. If one exists: **edit that comment** to the full final body (`gh api -X PATCH …/comments/{id}`). Do **not** post a second comment.
+2. If one exists: **edit that comment** to the full final body. Do **not** post a second comment.
 3. Compose the **full** body first; post once. If the create fails or the body is truncated/incomplete: **edit the same comment** to the complete text — never add a follow-up “completion” comment.
 4. One intent → one comment. Truncated + full = bug; fix by edit.
+
+### Safe create / edit encoding (Windows)
+
+PowerShell pipes and default `Out-File` often send **UTF-16** or a **BOM** into `gh`, which GitHub stores as mojibake — e.g. `Run …` becomes `�un …`. That is a bug; fix by re-edit.
+
+**Required pattern** for create and PATCH (all shells, especially Windows):
+
+1. Write the markdown body to a temp `.md` file as **UTF-8 without BOM** (agent Write tool, or Node `fs.writeFileSync(path, text, 'utf8')` — not PowerShell `>` / `Out-File` / `Set-Content` defaults).
+2. Build a JSON payload file the same way (UTF-8, no BOM):
+
+```bash
+node -e "const fs=require('fs'); const body=fs.readFileSync('body.md','utf8'); fs.writeFileSync('payload.json', JSON.stringify({body}), 'utf8');"
+```
+
+3. Post or edit with file input only — **never** pipe a PowerShell string into `gh`:
+
+```bash
+# create issue comment
+gh api repos/OWNER/REPO/issues/ISSUE/comments --input payload.json
+
+# edit existing issue/PR conversation comment
+gh api -X PATCH repos/OWNER/REPO/issues/comments/COMMENT_ID --input payload.json
+
+# short creates only (still prefer --body-file over -b on Windows):
+gh issue comment N --repo OWNER/REPO --body-file body.md
+gh pr comment N --repo OWNER/REPO --body-file body.md
+```
+
+4. **Verify after every create/edit:** re-fetch the comment body. Reject and re-PATCH if you see mojibake like `�un …` (first letter eaten), text that starts mid-word, or a truncated body. Use the UTF-8 file method until the fetched body matches what you intended.
 
 ## Comments
 
