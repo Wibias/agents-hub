@@ -57,18 +57,22 @@ Anti-patterns (rewrite before posting):
 
 **Target:** issue `#N` / PR `#N` (`head@<sha>` or `dev@<sha>`)
 **Scope:** <components / routes / auth surfaces reviewed>
-**Method:** <subagent / manual paths / scanners used as leads>
+**Method:** <security-review subagent + secrets scan + Semgrep/CodeQL if any + manual matrix>
+**Decision:** Pass / Pass after fixes / Do not ship yet  
+**Risk level:** Low / Medium / High / Critical  
+**Scope script:** `requiredSurfaces=[…]`; ai-agent-security: yes/no; agentic-skills-top10: yes/no; deps audit: yes/no/n/a; removed-controls/IaC/crypto as flagged; adversarial pass: no (unless user asked)
 
-| Severity | Area | Finding (redacted) | Next |
-|---|---|---|---|
-| critical\|high\|medium\|low\|info | <authz / tokens / …> | <what is wrong + affected surface — no exploit steps> | <fix in PR #n / patch tip / accept risk / needs maintainer> |
+| Severity | Confidence | Area | Finding (redacted) | Next |
+|---|---|---|---|---|
+| critical\|high\|medium\|low\|info | high (confirmed only) | <authz / tokens / AST0x / …> | <what is wrong + affected surface — no exploit steps> | <fix in PR #n / patch tip / accept risk / needs maintainer> |
 
+**Coverage (public summary):** authn/authz/injection/SSRF/secrets/CI/supply-chain/AI-agent/agentic-skills/providers/crypto-session/business-logic/removed-controls/IaC — done or n/a (name any n/a)
 **Summary:** <2–4 sentences: overall risk, whether tip is exploitable vs design gap>
 **Residual / out of scope:** <what you did not cover>
 **Fixes landed this session:** none / <sha + one line> (PR reviews only)
 ```
 
-If too sensitive for a useful public table, use the short “details shared privately” form in `security-review.md`, and put the full table in **chat**.
+Full coverage matrix + abuse paths stay in **chat**. If too sensitive for a useful public table, use the short “details shared privately” form in `security-review.md`.
 
 ## Full-review / re-review verdict (PR)
 

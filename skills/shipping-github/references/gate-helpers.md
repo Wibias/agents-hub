@@ -30,6 +30,16 @@ node "<shipping-github>/scripts/review-threads.mjs" OWNER/REPO N --resolve PRRT_
 
 Paginates `reviewThreads`; exit `1` if any unresolved. Prefer this over guessing from the UI. See **Review threads (GraphQL)** in `shared-rules.md`.
 
+## Security scope (PR → required surfaces)
+
+Before a security review on a PR:
+
+```bash
+node "<shipping-github>/scripts/security-scope.mjs" OWNER/REPO N
+```
+
+Returns `requiredSurfaces`, `requireAiAgentSecurity`, `requireAgenticSkillsTop10`, `requireDepsAudit`, `removedControlLeads`, `adversarialPassDefault: false`, and instructions (incl. crypto/session, business logic, IaC/Docker, AST01–10, confidence discipline). Cover every required surface; load `ai-agent-security` / AST10 checklist / deps audit when flagged. **Never** auto-launch adversarial/red-team second pass. See `security-review.md`.
+
 ## Watch wake gate (owner comments)
 
 Before any watch “waiting for CI/CodeRabbit” heartbeat:
