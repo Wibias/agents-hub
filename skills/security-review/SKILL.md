@@ -1,9 +1,27 @@
 ﻿---
 name: security-review
-description: Conducts practical security reviews of web apps, APIs, SaaS products, mobile clients, services, CI/CD pipelines, GitHub repos, and deployment configs. Triggers for pre-launch audits, auth/authz review, secrets scanning, CORS/headers, upload handling, payment and webhook security, dependency and supply-chain risk, security-relevant diffs, Semgrep/CodeQL scans, variant analysis, and prioritized fix plans. Differentiator: covers the full application and infrastructure layer -- not formal audit tool setup or engagement organisation (use audit-tooling), not fuzz harness construction (use fuzzing-and-testing), and not blockchain or smart contracts (use smart-contract-security).
+description: >
+  Practical security checklist and category depth for app/API/SaaS/CI audits:
+  authn/authz, secrets scanning, CORS/headers, uploads, webhooks, deps,
+  Semgrep/CodeQL leads, variant analysis. Use as depth when shipping-github
+  already owns a PR security review, or for non-ship codebase/pre-launch
+  audits. Do NOT use as the entrypoint for “security review on PR #N”,
+  merge-ready, full-review, or GitHub babysit — those belong to skill
+  shipping-github (references/security-review.md). Not audit-tooling,
+  fuzz harnesses, or smart-contract-security.
 ---
 
 # Security Review
+
+## Routing (read first)
+
+| Ask | Skill |
+|---|---|
+| Security review on **PR / issue** / merge-ready / full-review / babysit | **`shipping-github`** → `references/security-review.md` |
+| Depth checklist / `security-checks.md` / `scan_secrets.py` while that workflow runs | **This skill** (loaded by shipping-github) |
+| Standalone pre-launch / whole-repo audit with **no** GitHub ship loop | This skill |
+
+If the user named a PR or issue for ship-loop security, **stop and load `shipping-github`** instead of running this file as the whole review.
 
 Use this skill for pragmatic security review of normal software projects. Focus
 on concrete exploitable risks and launch-blocking issues, not generic

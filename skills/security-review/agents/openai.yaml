@@ -1,4 +1,4 @@
 interface:
   display_name: "Security Review"
-  short_description: "Practical app and code security review"
-  default_prompt: "Use $security-review to audit this codebase for practical security risks."
+  short_description: "App/security checklist depth (not GitHub PR ship-loop — use shipping-github for PR #N)"
+  default_prompt: "Use $shipping-github for security review on a PR/issue. Use $security-review only as checklist depth or for a non-ship codebase audit."
