@@ -1,0 +1,68 @@
+# Mutation modes
+
+Every workflow has an explicit mutation mode. Default to `read-only` unless the natural-language user request or a higher-level authorized workflow selects another mode.
+
+The user never needs to choose CLI flags. The agent derives the narrowest appropriate mode from the request, loads the matching workflow, and passes the mode to internal scripts.
+
+## Profiles
+
+| Action | read-only | review | maintainer | autonomous |
+|---|---:|---:|---:|---:|
+| Read evidence and draft text | yes | yes | yes | yes |
+| Publish PR/issue comments and reviews | no | yes | yes | yes |
+| Reply to a bot thread | no | yes | yes | yes |
+| Reply to a human thread | no | exact text required | exact text required | exact text required |
+| Push scoped code | no | no | yes | yes |
+| Post feedback-resolution records | no | no | yes | yes |
+| Resolve threads | no | no | explicit instruction | yes, subject to social policy |
+| Change draft state / request reviewers | no | no | explicit instruction | yes |
+| Merge PR / close linked issue | no | no | explicit instruction | yes, only inside the governing workflow |
+| Create a follow-up issue | no | no | explicit instruction | yes |
+
+The profile is an upper bound, not a waiver. Draft/WIP gates, exact-text confirmation, linked-issue thanks, stack handling, thread ownership, expected-head checks, and workflow-specific requirements still apply.
+
+## Natural-language selection
+
+Examples:
+
+- `what is left on PR #32?` → `read-only`
+- `review PR #32 and post the findings` → `review`
+- `fix PR #32 and make it merge ready` → `maintainer`
+- `merge PR #32` → `maintainer` with explicit authority for the merge workflow
+- `watch and autonomously fix/merge PR #32` → `autonomous` only when the wording truly grants that scope
+
+Do not ask users to run scripts. These mappings are agent behavior.
+
+## Machine-readable policy
+
+Inspect a profile:
+
+```bash
+node scripts/mutation-policy.mjs maintainer
+```
+
+Authorize one action:
+
+```bash
+node scripts/mutation-policy.mjs maintainer merge_pr --explicit
+```
+
+This policy check does not itself perform a write. All GitHub network writes must go through `scripts/github-mutate.mjs`; see `references/github-mutation-broker.md`.
+
+## Broker request
+
+```bash
+node scripts/github-mutate.mjs --request request.json
+node scripts/github-mutate.mjs --request request.json --execute --audit mutations.jsonl
+```
+
+The first form is a dry run. The second executes and records a versioned receipt.
+
+## Denial reasons
+
+- `mode_denied`: the selected profile never permits the action
+- `explicit_instruction_required`: maintainer mode needs a direct instruction for the action
+- `exact_text_confirmation_required`: a human-facing reply needs exact-text confirmation
+- `unknown_action`: the requested mutation is not part of the policy schema
+- `expected_head_mismatch`: the PR changed after the decision was made
+- request validation failures such as `idempotency_key_required`
