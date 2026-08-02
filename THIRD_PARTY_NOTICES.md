@@ -49,6 +49,7 @@ requests. See the full text in
 |-----------|----------|-------|
 | `writing-ticks` | [Wikipedia: Signs of AI writing](https://en.wikipedia.org/wiki/Wikipedia:Signs_of_AI_writing) | Condensed field guide; Wikipedia content is typically CC BY-SA — follow Wikipedia licensing if you redistribute substantial verbatim text |
 | `improve-react` | React Doctor rule concepts | Workflow is original; rule bar references React Doctor (see `react-doctor` above) |
+| `code-simplification` | Review-lens concepts from [bholmesdev/skills `simplify`](https://github.com/bholmesdev/skills/tree/main/skills/simplify) | Concepts only; wording and safety guards are original to this hub, and no upstream text or license file is redistributed |
 
 ## Hub-original skills
 
