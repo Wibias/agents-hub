@@ -2,13 +2,16 @@
 name: shipping-github
 description: >
   Primary skill for babysit / watch / monitor GitHub PRs, make merge-ready,
-  fix CodeRabbit/Codex/owner comments, research issues on latest development,
-  create linked PRs, full bug+security review, optional behavior-preserving
-  simplify/cleanup/deduplication, status, and merge with thanks.
+  resolve PR merge/rebase/cherry-pick/revert conflicts, update conflicted PR
+  branches, fix CodeRabbit/Codex/owner comments, research issues on latest
+  development, create linked PRs, full bug+security review, optional
+  behavior-preserving simplify/cleanup/deduplication, status, and merge with
+  thanks.
   Prefer this over Cursor’s built-in babysit (~/.cursor/skills-cursor/babysit):
   that stub only does conflicts/CI and will merge-dev-then-wait — wrong.
   Use when the user says babysit, watch PR, monitor CI, keep an eye on a PR,
-  make merge ready, research issue #N, create PR for issue, full review,
+  make merge ready, resolve PR conflicts, fix merge conflicts, update a
+  conflicted PR branch, research issue #N, create PR for issue, full review,
   simplify PR, clean up PR, deduplicate PR, or merge PR.
   Watch MUST run scripts/ship-gate.mjs every wake: exit 0 permits waiting,
   exit 1 means act on known blockers, and exit 2 forbids a readiness claim until
@@ -46,6 +49,7 @@ Match the user request, then read **only** the matching workflow file plus
 | Security review / security review on PR #N                              | `references/security-review.md`                    |
 | Status / what’s left / is PR #N merge ready? (read-only; same bar)      | `references/status.md`                             |
 | Merge PR #N; why-good + thanks; issue thank + close                     | `references/merge-pr.md`                           |
+| Active merge/rebase/cherry-pick/revert conflict during shipping         | `references/resolve-conflicts.md`, then resume     |
 | Stacked PRs (restack / retarget / merge bottom-up)                      | Hand off to skill `manage-stacked-prs`             |
 | Split oversized change into reviewable PRs                              | Hand off to skill `split-to-prs`                   |
 | Finish branch / worktree cleanup after ship                             | Hand off to skill `finishing-a-development-branch` |
@@ -98,19 +102,21 @@ Read `references/shared-rules.md` before acting. Non-negotiables:
 16. Status verdicts and merge operations must use the same authoritative `ship-gate.mjs` result and the same merge-ready bar. Individual helper output cannot overrule a blocked or unknown final decision. Watch milestones are not merge-ready.
 17. Draft→ready only after asking; inline replies in-thread; subagent checkout preflight; post-merge cleanup; backport only after ask; rate-limit backoff via Composio then gh; bare `#N` disambiguation; compose handoffs for stacks/split/finish/issue-workflow/git-workflow; CODEOWNERS enforcement vs suggestion-only; include the active mutation mode in mutation-capable command output.
 
-18. **>3 PRs (or research issues) in one ask → subagent fan-out** (one target per subagent, parallel/chunked) — never serialize large batches in the parent.
+18. **Conflict resolution.** When an active merge, rebase, cherry-pick, or revert conflict occurs during a shipping workflow, keep the current shipping workflow authoritative and load `references/resolve-conflicts.md`. Resolve from the intent and primary evidence of both sides, never from conflict markers alone; preserve both intents where compatible; never stage unrelated paths; and do not mechanically choose `ours` or `theirs`. Continue or complete the Git operation only when the active mutation mode and user authority permit it. After resolution, resume the original workflow and rerun all applicable diff, base-tip, build, test, CI, review, stale-approval, policy, and authoritative `ship-gate.mjs` gates. A clean index or completed Git operation never establishes merge readiness by itself.
 
-19. **Simplification is explicit-only.** Lower cognitive load and maintainability are the goals; **line count is never a success metric**. Do not simplify during an ordinary review. Before any simplify mutation, present bounded candidates and obtain explicit approval. Preserve behavior, APIs, errors, ordering, concurrency, output, UI, persistence, compatibility, validation, tests, security, CI, authorization, evidence, and fail-closed behavior. After approved changes, run focused and required gates, then automatically rerun the complete full review on the new head with simplification disabled; no second continuation prompt and no recursive simplify pass.
+19. **>3 PRs (or research issues) in one ask → subagent fan-out** (one target per subagent, parallel/chunked) — never serialize large batches in the parent.
 
-20. **Full-review completion lock.** Every `full-review-pr` run must maintain an execution plan whose final required item is `Publish final verdict`. Before any stop, return, handoff, final response, or completion claim, inspect the current plan. If `Publish final verdict` or any required prerequisite is `pending` or `in_progress`, continue the workflow instead of stopping. Reviewer or tool failure, pending CI, a hard blocker, unavailable evidence, or a host state such as `planning next moves` is evidence for the verdict, never permission to omit it. Only explicit user cancellation may end a full-review run without a verdict. If publishing the verdict to GitHub is unavailable, deliver the complete verdict in chat and then mark the verdict item complete.
+20. **Simplification is explicit-only.** Lower cognitive load and maintainability are the goals; **line count is never a success metric**. Do not simplify during an ordinary review. Before any simplify mutation, present bounded candidates and obtain explicit approval. Preserve behavior, APIs, errors, ordering, concurrency, output, UI, persistence, compatibility, validation, tests, security, CI, authorization, evidence, and fail-closed behavior. After approved changes, run focused and required gates, then automatically rerun the complete full review on the new head with simplification disabled; no second continuation prompt and no recursive simplify pass.
 
-21. **Semantic propagation audit.** A full review is not complete merely because every review axis ran. For every changed domain concept, identify its authoritative source, every producer, consumer, derived or public representation, serialization or persistence surface, materially distinct variant, and relevant test. Search the repository beyond the changed files. When code applies to a family, catalog, registry, provider set, model set, capability matrix, enum, schema, feature flag, permission set, or default table, partition all affected members by behavior. One representative member is insufficient unless equivalence is proved from the implementation and source data. Where a canonical representation exists, compare every derived representation against it exactly, including expected absences and rejected values. An unmapped affected surface, unproven equivalence assumption, source-of-truth mismatch, missing variant partition, or positive-only test gap blocks completion of the full-review verdict.
+21. **Full-review completion lock.** Every `full-review-pr` run must maintain an execution plan whose final required item is `Publish final verdict`. Before any stop, return, handoff, final response, or completion claim, inspect the current plan. If `Publish final verdict` or any required prerequisite is `pending` or `in_progress`, continue the workflow instead of stopping. Reviewer or tool failure, pending CI, a hard blocker, unavailable evidence, or a host state such as `planning next moves` is evidence for the verdict, never permission to omit it. Only explicit user cancellation may end a full-review run without a verdict. If publishing the verdict to GitHub is unavailable, deliver the complete verdict in chat and then mark the verdict item complete.
+
+22. **Semantic propagation audit.** A full review is not complete merely because every review axis ran. For every changed domain concept, identify its authoritative source, every producer, consumer, derived or public representation, serialization or persistence surface, materially distinct variant, and relevant test. Search the repository beyond the changed files. When code applies to a family, catalog, registry, provider set, model set, capability matrix, enum, schema, feature flag, permission set, or default table, partition all affected members by behavior. One representative member is insufficient unless equivalence is proved from the implementation and source data. Where a canonical representation exists, compare every derived representation against it exactly, including expected absences and rejected values. An unmapped affected surface, unproven equivalence assumption, source-of-truth mismatch, missing variant partition, or positive-only test gap blocks completion of the full-review verdict.
 
 ## Tooling
 
 - Prefer `gh` for GitHub reads/writes.
 - Detect the repo default branch; do not hardcode `main`.
-- Cross-use thin helpers when helpful: `review-bugbot` / `bugbot` (**Cursor bug axis only**, via `bug-review.md`), skill `review` (Spec+Standards), `manage-stacked-prs`, `split-to-prs`, `finishing-a-development-branch`, `git-workflow-and-versioning`, `issue-workflow`. **Do not** use `review-security` or Task `security-review` — use `references/security-review.md`.
+- Cross-use thin helpers when helpful: `review-bugbot` / `bugbot` (**Cursor bug axis only**, via `bug-review.md`), skill `review` (Spec+Standards), `manage-stacked-prs`, `split-to-prs`, `finishing-a-development-branch`, `git-workflow-and-versioning`, `issue-workflow`. Active Git conflicts remain inside this skill via `references/resolve-conflicts.md`. **Do not** use `review-security` or Task `security-review` — use `references/security-review.md`.
 - **Authoritative gate:** `scripts/ship-gate.mjs` is mandatory before ready, status-ready, merge, or watch-idle decisions and must be run with the active `--mutation-mode`. `scripts/required-checks.mjs`, `scripts/codeowners-for-pr.mjs`, `scripts/review-threads.mjs`, `scripts/pr-policy-gate.mjs`, and `scripts/watch-wake-gate.mjs` are focused diagnostic or mutation helpers only. `scripts/security-scope.mjs` and `scripts/bug-scope.mjs` remain review-scope helpers (see `references/gate-helpers.md`).
 - **Mutation policy:** `scripts/mutation-policy.mjs MODE [ACTION]` is the machine-readable authorization check; default mode is `read-only` (see `references/mutation-modes.md`).
 - **Rate limits:** prefer Composio MCP `GITHUB_GET_GRAPHQL_RATE_LIMIT` when GitHub toolkit is connected; else `gh api rate_limit` / `gh api graphql` `rateLimit` (see shared rules).
@@ -134,6 +140,7 @@ Read `references/shared-rules.md` before acting. Non-negotiables:
 - references/agentic-skills-top10.md -- when to read: security-scope requireAgenticSkillsTop10 (skill/MCP install paths)
 - references/status.md -- when to read: read-only PR status / what's left
 - references/merge-pr.md -- when to read: merge a PR with thanks and issue close-out
+- references/resolve-conflicts.md -- when to read: an active merge, rebase, cherry-pick, or revert conflict occurs during any shipping workflow; resolve it, then resume the owning workflow
 - references/gate-helpers.md -- when to read: before ready/merge/status/watch-idle; `ship-gate.mjs` is authoritative
 - references/base-health.md -- when to read: when required checks fail or base drift may affect PR scope
 - references/mutation-modes.md -- when to read: before any GitHub write or when selecting workflow authority
