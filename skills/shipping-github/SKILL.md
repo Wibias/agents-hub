@@ -5,8 +5,10 @@ description: >
   create PRDs, create and break down GitHub issues, triage bugs and
   enhancements, run QA intake, prepare ready-for-agent briefs and refactor
   plans, record rejected enhancements, research issues on the latest
-  development tip, create linked PRs, babysit / watch / monitor PRs, make them
-  merge-ready, resolve conflicts while updating or shipping PR branches, fix
+  development tip, create linked PRs, inspect and manage existing stacked
+  PRs, restack or retarget stack branches, recover rewritten stack branches,
+  merge stacks bottom-up, babysit / watch / monitor PRs, make them merge-ready,
+  resolve conflicts while updating or shipping PR branches, fix
   CodeRabbit/Codex/owner comments, run full bug+security review, optionally
   simplify/cleanup/deduplicate without behavior changes, report status, merge
   with thanks, and close linked issues.
@@ -15,7 +17,9 @@ description: >
   Use when the user asks to create a PRD, create or break down GitHub issues,
   triage issues, file a bug, run QA intake, prepare an agent brief, plan a
   refactor, record an out-of-scope decision, research issue #N, create a PR for
-  an issue, babysit or watch a PR, monitor CI, make a PR merge-ready, resolve PR
+  an issue, inspect a PR stack, restack or retarget stacked PRs, recover a
+  rewritten stack branch, merge the bottom PR or an entire stack safely,
+  babysit or watch a PR, monitor CI, make a PR merge-ready, resolve PR
   conflicts, update a conflicted PR branch, run a full review, simplify or
   clean up a PR, report status, or merge a PR.
   Watch MUST run scripts/ship-gate.mjs every wake: exit 0 permits waiting,
@@ -29,9 +33,9 @@ description: >
 # Shipping GitHub
 
 Own GitHub work from product intake through merged PR: PRDs, issues, triage,
-implementation handoff, research, review, CI, conflict resolution, merge
-readiness, merging, and linked-issue close-out. Optional **watch** mode keeps
-monitoring after green.
+implementation handoff, research, single and stacked PR topology, review,
+CI, conflict resolution, merge readiness, merging, and linked-issue close-out.
+Optional **watch** mode keeps monitoring after green.
 
 **Conflict with thin babysit skills:** Cursor’s built-in `babysit`
 (`~/.cursor/skills-cursor/babysit`) reinstalls if deleted. OpenAI’s optional
@@ -65,7 +69,7 @@ Match the user request, then read **only** the matching workflow file plus
 | Status / what’s left / is PR #N merge ready? (read-only; same bar)      | `references/status.md`                             |
 | Merge PR #N; why-good + thanks; issue thank + close                     | `references/merge-pr.md`                           |
 | Active Git conflict while updating or shipping a PR                    | `references/resolve-conflicts.md`, then resume     |
-| Stacked PRs (restack / retarget / merge bottom-up)                      | Hand off to skill `manage-stacked-prs`             |
+| Inspect / restack / retarget / recover / merge existing stacked PRs    | `references/stacked-prs.md`                        |
 | Split oversized change into reviewable PRs                              | Hand off to skill `split-to-prs`                   |
 | Finish branch / worktree cleanup after ship                             | Hand off to skill `finishing-a-development-branch` |
 | Commit / semver / changelog authoring / release tag                     | Hand off to skill `git-workflow-and-versioning`    |
@@ -83,6 +87,13 @@ complete `references/research-issue.md` before
 triage workflow composes `references/agent-brief.md`. For a confirmed rejected
 enhancement, it composes `references/out-of-scope.md`.
 
+For any PR whose base is another open PR head, or which has open child PRs,
+load `references/stacked-prs.md` before mutation, readiness, or merge decisions.
+That reference is authoritative for stack discovery, parent/child topology,
+restacking, retargeting, recovery, and merge order. The selected PR workflow
+remains authoritative for the review, fix, CI, security, and readiness bar of
+each individual PR.
+
 **Merge-ready paths already run security** (`fix-pr-bots`, `create-pr-for-issue`).
 For other PR workflows that only _offer_ security, apply the **security review
 offer** in `references/shared-rules.md` when loading the PR body.
@@ -92,14 +103,14 @@ offer** in `references/shared-rules.md` when loading the PR body.
 Read `references/shared-rules.md` before acting. Non-negotiables:
 
 1. Scope lock — no drive-by refactors; never weaken CI to go green. For a red head, use the `baseHealth` component: PR-only failures are in scope; failures reproduced on the base tip may block merging but require a separate follow-up instead of silently expanding this PR; unknown origin is a hard evidence stop.
-2. Git safety — stop on dirty unrelated trees; never force-push; stop if push rejected; **fork-head unwritable → hard stop** (shared rules).
+2. Git safety — stop on dirty unrelated trees; never use bare `--force`; stop if any push or lease is rejected; **fork-head unwritable → hard stop** (shared rules). `--force-with-lease` is permitted only for an explicitly authorized stacked-PR restack or stack recovery on a writable non-default branch, after recording the expected remote tip, creating a local backup ref, and presenting the bounded rewrite plan. Never rewrite trunk, a protected/shared branch, or an unrelated branch.
 3. Review triage — trusted owners/maintainers first; published feedback only; verify bots against code.
 4. Social mutation — select one explicit mode: `read-only`, `review`, `maintainer`, or `autonomous`. The profile is an upper bound, never a waiver. Reading GitHub state and drafting locally are read-only. Creating or editing issues/PRs, labels, assignments, milestones, comments, state transitions, thread resolution, draft changes, reviewer requests, merges, closure/reopen, and follow-up creation are external writes. A direct user request authorizes only the specifically requested publication scope; human replies always require exact-text confirmation, and maintainer-grade mutations require direct instruction. Use `scripts/mutation-policy.mjs` before a write when authority is not obvious.
 5. CI classify — **prefer fix/harden over reruns**; app/API test timeouts are not “infra”; never guess whether a required failure is unrelated. Use `ship-gate.mjs` base-health evidence: `fix_in_pr`, `separate_follow_up`, or `investigate`. Same failure twice on one SHA → stop blind reruns; true infra → `gh run rerun RUN_ID --failed` (or `--job <databaseId>`) and verify the failed leg actually restarted; max 3 true-infra reruns per SHA.
 6. Mode-aware waits — merge-ready / full-review / babysit-fix: **until green+comments clean** (or hard blocker); never abandon babysit on “3 rounds / 20m of work”; never invent a fixed **20 min CI sleep** (`windows-latest` usually **~12–15 min** — poll ~1 min; shared **CI wait expectations**); never invent soft “maintainer ack” stops; **thin settle** (~3–5 min quiet + recheck) before merge-ready / `approve-comment`; watch: **every wake run `ship-gate.mjs`**. Exit `1` means act on its namespaced blockers before idling; exit `2` means restore evidence and do not call the PR ready; exit `0` permits waiting. Use component helpers only to diagnose the authoritative result. Merge-queue queued still does not mean merged.
-7. Behind base + **compile against tip** — update from base, then verify build/tests on tip before merge-ready / full-review approve / merge. After push: re-check **stale approvals / last-push** policy.
+7. Behind base + **compile against tip** — for a standalone PR, update from its base; for a stack, update the bottom PR against trunk and each child against its immediate parent, bottom → top. Then verify build/tests on the resulting tip before merge-ready / full-review approve / merge. After every push or rewritten head, re-check **stale approvals / last-push** policy.
 8. Draft/WIP/do-not-merge — never merge or claim ready while gated.
-9. Prefer in-PR fixes; merge only on merge workflow (thank PR + **issue authors**, no self-thanks; auto-close issues when fixed). **Never** `gh pr merge` without the issue-thank step when `closingIssuesReferences` / `Fixes #N` exist. **Stacked → `manage-stacked-prs`** (never merge mid-stack as if it were trunk).
+9. Prefer in-PR fixes; merge only on merge workflow (thank PR + **issue authors**, no self-thanks; auto-close issues when fixed). **Never** `gh pr merge` without the issue-thank step when `closingIssuesReferences` / `Fixes #N` exist. Stacked PRs remain inside this skill via `references/stacked-prs.md`: never merge a middle or top PR as if it targeted trunk; merge bottom-up and revalidate every surviving child after each parent lands.
 10. Create-PR: need-to-fix preflight; **one PR** unless explicit batch; **canonical repo only** (never fork-only deliverable); verify `Fixes #N` link; **assign @me** on the issue; **one** idempotent issue comment (edit if incomplete — never a second cut-off comment).
 
 11. **Issue lifecycle.** For PRDs, issue creation/breakdown, triage, QA intake, and refactor plans, load the selected section of `references/issue-workflows.md`. Research current repository behavior before publishing; do not over-interview when the conversation already resolves the important decisions. Search for obvious duplicates before creating issues. Break implementation work into independently verifiable vertical slices, mark each `AFK` or `HITL`, preserve dependency order, and present the breakdown before publishing unless the user explicitly requested direct creation. Every `ready-for-agent` issue requires `references/agent-brief.md`. Reject and close an enhancement as `wontfix`, or write/update `.out-of-scope/`, only after explicit maintainer confirmation using `references/out-of-scope.md`. After every issue write, read back the result and report its URL.
@@ -124,23 +135,25 @@ Read `references/shared-rules.md` before acting. Non-negotiables:
     When mentioning a GitHub user, never wrap GitHub `@login` mentions in backticks; emit the mention as plain text so GitHub can notify the user.
 16. Merge-ready only when bots/humans are clear **and** own bug+security+spec reviews are done **and** thin settle elapsed; also post/edit one notify on each **linked issue** (not only on the PR). The final `ship-gate.mjs` result must be `ready`; unresolved GraphQL review threads remain blocking inside that decision.
 17. Status verdicts and merge operations must use the same authoritative `ship-gate.mjs` result and the same merge-ready bar. Individual helper output cannot overrule a blocked or unknown final decision. Watch milestones are not merge-ready.
-18. Draft→ready only after asking; inline replies in-thread; subagent checkout preflight; post-merge cleanup; backport only after ask; rate-limit backoff via Composio then gh; bare `#N` disambiguation; compose handoffs for stacks/split/finish/git-workflow; CODEOWNERS enforcement vs suggestion-only; include the active mutation mode in mutation-capable command output.
+18. Draft→ready only after asking; inline replies in-thread; subagent checkout preflight; post-merge cleanup; backport only after ask; rate-limit backoff via Composio then gh; bare `#N` disambiguation; compose handoffs for split/finish/git-workflow; CODEOWNERS enforcement vs suggestion-only; include the active mutation mode in mutation-capable command output.
 
 19. **Conflict resolution.** When an active Git conflict occurs while updating or shipping a GitHub PR, keep the current shipping workflow authoritative and load `references/resolve-conflicts.md`. Resolve from the intent and primary evidence of both sides, never from conflict markers alone; preserve both intents where compatible; never stage unrelated paths; and do not mechanically choose `ours` or `theirs`. Continue or complete the Git operation only when the active mutation mode and user authority permit it. After resolution, resume the original workflow and rerun all applicable diff, base-tip, build, test, CI, review, stale-approval, policy, and authoritative `ship-gate.mjs` gates. A clean index or completed Git operation never establishes merge readiness by itself.
 
-20. **>3 existing PRs or issues to inspect/research/triage in one ask → subagent fan-out** (one target per subagent, parallel/chunked) — never serialize large batches in the parent.
+20. **Stack topology and lifecycle.** A PR stack is the connected graph formed by open PR `headRefName → baseRefName` links; GitHub PR bases are the authoritative topology, not branch-name guesses or local ancestry alone. Before reviewing, updating, declaring ready, or merging any PR that belongs to a stack, load `references/stacked-prs.md` and inspect the complete connected component. Review each PR primarily as its delta against its immediate parent and also verify the cumulative state needed at that level. Restack bottom → top; merge bottom-up, one PR at a time. Before a history rewrite, present the exact branches, old tips, new parents, backup refs, and push plan. After every restack, retarget, recovery, or parent merge, re-inspect the stack, verify every remaining base and remote tip, rerun the affected PR workflow and required gates, and obtain a fresh authoritative `ship-gate.mjs` result. Never reuse readiness, approvals, review conclusions, or CI evidence from a pre-rewrite head.
 
-21. **Simplification is explicit-only.** Lower cognitive load and maintainability are the goals; **line count is never a success metric**. Do not simplify during an ordinary review. Before any simplify mutation, present bounded candidates and obtain explicit approval. Preserve behavior, APIs, errors, ordering, concurrency, output, UI, persistence, compatibility, validation, tests, security, CI, authorization, evidence, and fail-closed behavior. After approved changes, run focused and required gates, then automatically rerun the complete full review on the new head with simplification disabled; no second continuation prompt and no recursive simplify pass.
+21. **>3 existing PRs or issues to inspect/research/triage in one ask → subagent fan-out** (one target per subagent, parallel/chunked) — never serialize large batches in the parent.
 
-22. **Full-review completion lock.** Every `full-review-pr` run must maintain an execution plan whose final required item is `Publish final verdict`. Before any stop, return, handoff, final response, or completion claim, inspect the current plan. If `Publish final verdict` or any required prerequisite is `pending` or `in_progress`, continue the workflow instead of stopping. Reviewer or tool failure, pending CI, a hard blocker, unavailable evidence, or a host state such as `planning next moves` is evidence for the verdict, never permission to omit it. Only explicit user cancellation may end a full-review run without a verdict. If publishing the verdict to GitHub is unavailable, deliver the complete verdict in chat and then mark the verdict item complete.
+22. **Simplification is explicit-only.** Lower cognitive load and maintainability are the goals; **line count is never a success metric**. Do not simplify during an ordinary review. Before any simplify mutation, present bounded candidates and obtain explicit approval. Preserve behavior, APIs, errors, ordering, concurrency, output, UI, persistence, compatibility, validation, tests, security, CI, authorization, evidence, and fail-closed behavior. After approved changes, run focused and required gates, then automatically rerun the complete full review on the new head with simplification disabled; no second continuation prompt and no recursive simplify pass.
 
-23. **Semantic propagation audit.** A full review is not complete merely because every review axis ran. For every changed domain concept, identify its authoritative source, every producer, consumer, derived or public representation, serialization or persistence surface, materially distinct variant, and relevant test. Search the repository beyond the changed files. When code applies to a family, catalog, registry, provider set, model set, capability matrix, enum, schema, feature flag, permission set, or default table, partition all affected members by behavior. One representative member is insufficient unless equivalence is proved from the implementation and source data. Where a canonical representation exists, compare every derived representation against it exactly, including expected absences and rejected values. An unmapped affected surface, unproven equivalence assumption, source-of-truth mismatch, missing variant partition, or positive-only test gap blocks completion of the full-review verdict.
+23. **Full-review completion lock.** Every `full-review-pr` run must maintain an execution plan whose final required item is `Publish final verdict`. Before any stop, return, handoff, final response, or completion claim, inspect the current plan. If `Publish final verdict` or any required prerequisite is `pending` or `in_progress`, continue the workflow instead of stopping. Reviewer or tool failure, pending CI, a hard blocker, unavailable evidence, or a host state such as `planning next moves` is evidence for the verdict, never permission to omit it. Only explicit user cancellation may end a full-review run without a verdict. If publishing the verdict to GitHub is unavailable, deliver the complete verdict in chat and then mark the verdict item complete.
+
+24. **Semantic propagation audit.** A full review is not complete merely because every review axis ran. For every changed domain concept, identify its authoritative source, every producer, consumer, derived or public representation, serialization or persistence surface, materially distinct variant, and relevant test. Search the repository beyond the changed files. When code applies to a family, catalog, registry, provider set, model set, capability matrix, enum, schema, feature flag, permission set, or default table, partition all affected members by behavior. One representative member is insufficient unless equivalence is proved from the implementation and source data. Where a canonical representation exists, compare every derived representation against it exactly, including expected absences and rejected values. An unmapped affected surface, unproven equivalence assumption, source-of-truth mismatch, missing variant partition, or positive-only test gap blocks completion of the full-review verdict.
 
 ## Tooling
 
 - Prefer `gh` for GitHub reads/writes.
 - Detect the repo default branch; do not hardcode `main`.
-- Cross-use thin helpers when helpful: `review-bugbot` / `bugbot` (**Cursor bug axis only**, via `bug-review.md`), skill `review` (Spec+Standards), `manage-stacked-prs`, `split-to-prs`, `finishing-a-development-branch`, `git-workflow-and-versioning`. GitHub issue workflows and active PR conflicts remain inside this skill via `references/issue-workflows.md`, `references/agent-brief.md`, `references/out-of-scope.md`, and `references/resolve-conflicts.md`. **Do not** use `review-security` or Task `security-review` — use `references/security-review.md`.
+- Cross-use thin helpers when helpful: `review-bugbot` / `bugbot` (**Cursor bug axis only**, via `bug-review.md`), skill `review` (Spec+Standards), `split-to-prs`, `finishing-a-development-branch`, `git-workflow-and-versioning`. GitHub issue workflows, stacked PRs, and active PR conflicts remain inside this skill via `references/issue-workflows.md`, `references/agent-brief.md`, `references/out-of-scope.md`, `references/stacked-prs.md`, and `references/resolve-conflicts.md`. **Do not** use `review-security` or Task `security-review` — use `references/security-review.md`.
 - **Authoritative gate:** `scripts/ship-gate.mjs` is mandatory before ready, status-ready, merge, or watch-idle decisions and must be run with the active `--mutation-mode`. `scripts/required-checks.mjs`, `scripts/codeowners-for-pr.mjs`, `scripts/review-threads.mjs`, `scripts/pr-policy-gate.mjs`, and `scripts/watch-wake-gate.mjs` are focused diagnostic or mutation helpers only. `scripts/security-scope.mjs` and `scripts/bug-scope.mjs` remain review-scope helpers (see `references/gate-helpers.md`).
 - **Mutation policy:** `scripts/mutation-policy.mjs MODE [ACTION]` is the machine-readable authorization check; default mode is `read-only` (see `references/mutation-modes.md`).
 - **Rate limits:** prefer Composio MCP `GITHUB_GET_GRAPHQL_RATE_LIMIT` when GitHub toolkit is connected; else `gh api rate_limit` / `gh api graphql` `rateLimit` (see shared rules).
@@ -168,6 +181,7 @@ Read `references/shared-rules.md` before acting. Non-negotiables:
 - references/status.md -- when to read: read-only PR status / what's left
 - references/merge-pr.md -- when to read: merge a PR with thanks and issue close-out
 - references/resolve-conflicts.md -- when to read: an active Git conflict occurs while updating or shipping a GitHub PR; resolve it, then resume the owning workflow
+- references/stacked-prs.md -- when to read: inspect, review, restack, retarget, recover, update, declare ready, or merge any PR in an existing stack
 - references/gate-helpers.md -- when to read: before ready/merge/status/watch-idle; `ship-gate.mjs` is authoritative
 - references/base-health.md -- when to read: when required checks fail or base drift may affect PR scope
 - references/mutation-modes.md -- when to read: before any GitHub write or when selecting workflow authority
