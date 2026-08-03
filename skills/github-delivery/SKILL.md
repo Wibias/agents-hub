@@ -29,6 +29,12 @@ description: >
   GitHub write must be permitted by the selected profile and the stricter social
   rules. Do not use for: local unit-test debugging with no GitHub issue or PR,
   non-GitHub product planning, or skill authoring (skill-ratchet).
+license: MIT
+compatibility: Requires Node.js 20+, git, GitHub network access, and an authenticated gh or brokered connector for writes.
+metadata:
+  author: Wibias
+  version: "0.1.0"
+  repository: "https://github.com/Wibias/github-delivery"
 ---
 
 # GitHub Delivery
