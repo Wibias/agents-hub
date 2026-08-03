@@ -2,16 +2,16 @@
 name: shipping-github
 description: >
   Primary skill for babysit / watch / monitor GitHub PRs, make merge-ready,
-  resolve PR merge/rebase/cherry-pick/revert conflicts, update conflicted PR
-  branches, fix CodeRabbit/Codex/owner comments, research issues on latest
+  resolve conflicts encountered while updating or shipping GitHub PR branches,
+  update conflicted PR branches, fix CodeRabbit/Codex/owner comments, research issues on latest
   development, create linked PRs, full bug+security review, optional
   behavior-preserving simplify/cleanup/deduplication, status, and merge with
   thanks.
   Prefer this over Cursor’s built-in babysit (~/.cursor/skills-cursor/babysit):
   that stub only does conflicts/CI and will merge-dev-then-wait — wrong.
   Use when the user says babysit, watch PR, monitor CI, keep an eye on a PR,
-  make merge ready, resolve PR conflicts, fix merge conflicts, update a
-  conflicted PR branch, research issue #N, create PR for issue, full review,
+  make merge ready, resolve PR conflicts, fix conflicts while updating a PR,
+  update a conflicted PR branch, research issue #N, create PR for issue, full review,
   simplify PR, clean up PR, deduplicate PR, or merge PR.
   Watch MUST run scripts/ship-gate.mjs every wake: exit 0 permits waiting,
   exit 1 means act on known blockers, and exit 2 forbids a readiness claim until
@@ -49,7 +49,7 @@ Match the user request, then read **only** the matching workflow file plus
 | Security review / security review on PR #N                              | `references/security-review.md`                    |
 | Status / what’s left / is PR #N merge ready? (read-only; same bar)      | `references/status.md`                             |
 | Merge PR #N; why-good + thanks; issue thank + close                     | `references/merge-pr.md`                           |
-| Active merge/rebase/cherry-pick/revert conflict during shipping         | `references/resolve-conflicts.md`, then resume     |
+| Active Git conflict while updating or shipping a PR                    | `references/resolve-conflicts.md`, then resume     |
 | Stacked PRs (restack / retarget / merge bottom-up)                      | Hand off to skill `manage-stacked-prs`             |
 | Split oversized change into reviewable PRs                              | Hand off to skill `split-to-prs`                   |
 | Finish branch / worktree cleanup after ship                             | Hand off to skill `finishing-a-development-branch` |
@@ -102,7 +102,7 @@ Read `references/shared-rules.md` before acting. Non-negotiables:
 16. Status verdicts and merge operations must use the same authoritative `ship-gate.mjs` result and the same merge-ready bar. Individual helper output cannot overrule a blocked or unknown final decision. Watch milestones are not merge-ready.
 17. Draft→ready only after asking; inline replies in-thread; subagent checkout preflight; post-merge cleanup; backport only after ask; rate-limit backoff via Composio then gh; bare `#N` disambiguation; compose handoffs for stacks/split/finish/issue-workflow/git-workflow; CODEOWNERS enforcement vs suggestion-only; include the active mutation mode in mutation-capable command output.
 
-18. **Conflict resolution.** When an active merge, rebase, cherry-pick, or revert conflict occurs during a shipping workflow, keep the current shipping workflow authoritative and load `references/resolve-conflicts.md`. Resolve from the intent and primary evidence of both sides, never from conflict markers alone; preserve both intents where compatible; never stage unrelated paths; and do not mechanically choose `ours` or `theirs`. Continue or complete the Git operation only when the active mutation mode and user authority permit it. After resolution, resume the original workflow and rerun all applicable diff, base-tip, build, test, CI, review, stale-approval, policy, and authoritative `ship-gate.mjs` gates. A clean index or completed Git operation never establishes merge readiness by itself.
+18. **Conflict resolution.** When an active Git conflict occurs while updating or shipping a GitHub PR, keep the current shipping workflow authoritative and load `references/resolve-conflicts.md`. Resolve from the intent and primary evidence of both sides, never from conflict markers alone; preserve both intents where compatible; never stage unrelated paths; and do not mechanically choose `ours` or `theirs`. Continue or complete the Git operation only when the active mutation mode and user authority permit it. After resolution, resume the original workflow and rerun all applicable diff, base-tip, build, test, CI, review, stale-approval, policy, and authoritative `ship-gate.mjs` gates. A clean index or completed Git operation never establishes merge readiness by itself.
 
 19. **>3 PRs (or research issues) in one ask → subagent fan-out** (one target per subagent, parallel/chunked) — never serialize large batches in the parent.
 
@@ -140,7 +140,7 @@ Read `references/shared-rules.md` before acting. Non-negotiables:
 - references/agentic-skills-top10.md -- when to read: security-scope requireAgenticSkillsTop10 (skill/MCP install paths)
 - references/status.md -- when to read: read-only PR status / what's left
 - references/merge-pr.md -- when to read: merge a PR with thanks and issue close-out
-- references/resolve-conflicts.md -- when to read: an active merge, rebase, cherry-pick, or revert conflict occurs during any shipping workflow; resolve it, then resume the owning workflow
+- references/resolve-conflicts.md -- when to read: an active Git conflict occurs while updating or shipping a GitHub PR; resolve it, then resume the owning workflow
 - references/gate-helpers.md -- when to read: before ready/merge/status/watch-idle; `ship-gate.mjs` is authoritative
 - references/base-health.md -- when to read: when required checks fail or base drift may affect PR scope
 - references/mutation-modes.md -- when to read: before any GitHub write or when selecting workflow authority

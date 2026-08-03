@@ -1,85 +1,110 @@
-# Resolve Merge, Rebase, Cherry-Pick, or Revert Conflicts
+# Resolve Conflicts During a GitHub PR Workflow
 
-Use this workflow when the active shipping workflow encounters Git conflicts.
-`shipping-github` retains ownership of the overall task.
+Use this reference only when the active `shipping-github` workflow encounters
+Git conflicts while updating, rebasing, merging, cherry-picking, reverting, or
+otherwise preparing a pull-request branch.
 
-## 1. Inspect the operation
+`shipping-github` remains the owning workflow. This reference resolves the
+conflict phase only, then returns control to the workflow that invoked it.
+
+## 1. Inspect the active operation
 
 Determine:
 
-- whether Git is currently merging, rebasing, cherry-picking, or reverting;
-- the current branch, base, head, and operation state;
+- whether Git is merging, rebasing, cherry-picking, or reverting;
+- the current branch, PR head, PR base, and latest base tip;
 - every conflicted path;
-- whether unrelated worktree changes are present.
+- whether unrelated worktree or index changes are present;
+- whether the active mutation mode permits modifying and continuing the branch.
 
-Stop before modifying files when unrelated dirty changes, an unexpected branch,
-an incorrect base, or an unclear operation state could cause data loss.
+Stop before modifying files when:
 
-## 2. Recover both intents
+- the branch, base, or operation is not the expected PR operation;
+- unrelated dirty changes could be overwritten or accidentally staged;
+- the PR head is not writable;
+- continuing would require force-pushing or another forbidden mutation;
+- the intended behavior cannot be determined from available evidence.
 
-For every conflict, inspect the primary evidence for both sides:
+Do not automatically abort or continue an operation merely to clear Git state.
 
-- conflicting commits and their messages;
-- surrounding history;
-- changed tests and specifications;
-- linked PRs, issues, or review comments;
-- the current base-tip implementation.
+## 2. Recover the intent of both sides
+
+For every conflict, inspect the primary evidence for both changes:
+
+- the conflicting commits and commit messages;
+- the complete surrounding diff and relevant history;
+- linked PRs, issues, review comments, and specifications;
+- tests changed by either side;
+- the implementation on the latest base tip;
+- related producers, consumers, schemas, registries, generated outputs, and
+  public representations when the conflict changes a domain concept.
 
 Do not resolve a conflict from marker text alone.
 
 ## 3. Resolve deliberately
 
-Preserve both intents where they are compatible.
+Preserve both intents when they are compatible.
 
-Where they are incompatible:
+When they are incompatible:
 
-1. follow the goal of the owning shipping workflow;
+1. follow the explicit goal and scope of the owning PR workflow;
 2. preserve current base behavior unless the PR intentionally changes it;
-3. do not invent unrelated behavior;
-4. record any material trade-off or discarded behavior.
+3. preserve the PR's intended change where it remains valid against the base;
+4. do not invent unrelated behavior;
+5. record any material behavior or implementation that must be discarded.
 
-Never choose `ours` or `theirs` mechanically across the entire file or
-operation.
+Never:
 
-## 4. Validate the resolution
+- choose `ours` or `theirs` mechanically across a file or operation;
+- delete tests merely because they conflict;
+- weaken validation, authorization, security, CI, or fail-closed behavior;
+- widen the PR with unrelated cleanup or refactoring;
+- resolve generated output without checking its authoritative source.
 
-After removing all conflict markers:
+## 4. Validate the resolved result
 
-- inspect the complete resulting diff;
-- confirm no intended changes disappeared;
+After resolving every hunk:
+
+- inspect the complete resulting diff, not only the formerly conflicted lines;
+- confirm no intended base or PR changes disappeared;
 - search for remaining conflict markers;
-- run focused checks for the affected files;
-- run the repository's required formatting, type, build, and test gates as
-  required by the owning workflow.
+- validate generated and derived representations against their source of truth;
+- run focused checks for the affected paths;
+- run the build, typecheck, tests, formatting, lint, and security gates required
+  by the owning workflow.
 
-Conflict resolution is not complete merely because Git accepts the files.
+A file being accepted by Git does not prove the resolution is correct.
 
 ## 5. Continue safely
 
-Stage only paths resolved as part of the active operation. Never stage unrelated
-changes.
+Stage only the paths resolved by this operation. Never stage unrelated changes.
 
-Continue a rebase, cherry-pick, or revert only when the active mutation mode and
-user authority permit it.
+Continue the merge, rebase, cherry-pick, or revert only when the active mutation
+mode and user authority permit it.
 
-Create or complete a merge commit only when commit authority is explicit.
+Do not:
 
-Do not abort automatically. Abort or stop only when required to prevent data
-loss, the operation was started incorrectly, the intended result cannot be
-determined safely, or the owning workflow requires human input.
+- force-push;
+- create unrelated commits;
+- rewrite additional history;
+- mark the PR ready;
+- merge the PR;
+- post GitHub comments merely because the conflict is resolved.
 
 ## 6. Return to the owning workflow
 
-After the Git operation is complete, return to the current
-`shipping-github` workflow.
+After the Git operation completes, resume the original `shipping-github`
+workflow.
 
-The owning workflow must re-check:
+Re-check at minimum:
 
 - resulting diff and PR scope;
 - compatibility with the latest base tip;
-- required tests and CI;
+- required build and test gates;
+- CI state;
+- review comments and unresolved threads;
 - stale approvals and last-push policy;
-- review threads and policy gates;
+- CODEOWNERS and repository policy;
 - the authoritative `ship-gate.mjs` result.
 
-Resolving conflicts never establishes merge readiness by itself.
+Conflict resolution never establishes merge readiness by itself.

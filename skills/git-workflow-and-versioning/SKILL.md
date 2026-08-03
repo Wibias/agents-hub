@@ -1,262 +1,238 @@
 ---
 name: git-workflow-and-versioning
 description: >-
-  Structures git workflow and semantic versioning practices for every code
-  change. Use when committing, branching, resolving conflicts, or organizing
-  work across parallel streams; and when cutting a release, choosing a semver
-  bump, tagging, or writing a changelog. Do not use for: PR babysit/watch,
-  CodeRabbit/Codex review loops, or GitHub merge ceremony (use shipping-github).
-  Distinct from setup-pre-commit (hook installation) and
-  superpowers:using-git-worktrees (worktree mechanics); this skill owns the
-  commit discipline, branching strategy, versioning contract, and changelog
-  authoring that apply to all code work.
+  Use for commit planning and authoring, commit messages, branch organization,
+  semantic-version decisions, release preparation, release tags, and changelog
+  authoring. Do not use for GitHub issue or pull-request lifecycle work,
+  including PR review, CI monitoring, PR branch updates, conflict resolution,
+  merge readiness, or GitHub merging; those are owned by shipping-github.
+  Distinct from setup-pre-commit for hook installation and
+  superpowers:using-git-worktrees for worktree mechanics.
 ---
 
 # Git Workflow and Versioning
 
-> Source: addyosmani/agent-skills (https://github.com/addyosmani/agent-skills), MIT License. Adapted 2026-07-10.
+Own the repository's commit, branch, versioning, tagging, and changelog
+discipline. Follow repository conventions before applying generic guidance.
 
-## Overview
+> Source: addyosmani/agent-skills
+> (https://github.com/addyosmani/agent-skills), MIT License.
+> Adapted 2026-07-10.
 
-Git is your safety net. Treat commits as save points, branches as sandboxes, and history as documentation. With AI agents generating code at high speed, disciplined version control keeps changes manageable, reviewable, and reversible.
+## Ownership boundary
 
-## When to Use
+This skill does not own GitHub issue or pull-request workflows.
 
-Always. Every code change flows through git.
+When a GitHub issue or PR is involved, start with `shipping-github`.
+`shipping-github` owns PR branch updates, conflict resolution, reviews, CI,
+readiness, and merging. It may hand off only commit-message, commit-structure,
+versioning, tagging, changelog, or release-authoring work to this skill.
 
-## Core Principles
+Do not load this skill merely because a coding task may eventually be committed.
 
-### Trunk-Based Development (Recommended)
+## Route
 
-Keep `main` always deployable. Work in short-lived feature branches that merge back within 1-3 days. DORA research consistently shows trunk-based development correlates with high-performing engineering teams.
+| Request shape                                                   | Workflow section                |
+| --------------------------------------------------------------- | ------------------------------- |
+| Plan or author commits; improve commit messages                 | Commit discipline               |
+| Create or organize local branches                              | Branch discipline               |
+| Decide MAJOR / MINOR / PATCH                                   | Semantic versioning             |
+| Prepare a release tag                                          | Release tags                    |
+| Write or update a human-facing changelog                        | Changelog authoring             |
+| GitHub PR review, update, conflict, readiness, watch, or merge  | Hand off to `shipping-github`   |
+| Worktree creation or worktree mechanics                         | Hand off to `using-git-worktrees` |
+| Hook installation or pre-commit setup                           | Hand off to `setup-pre-commit`  |
 
-```
-main --o--o--o--o--o--o--o--  (always deployable)
-       \     /  \   /
-        o--o      o           <- short-lived feature branches (1-3 days)
-```
+If the request spans multiple rows, apply the relevant sections in order.
 
-Dev branches are costs. Every day a branch lives, it accumulates merge risk. Feature flags are preferred over long-lived branches.
+## Hard rules
 
-### 1. Commit Early, Commit Often
+1. Repository policy wins. Inspect existing contribution guides, commit
+   conventions, release automation, branch naming, version files, tags, and
+   changelog format before applying defaults.
+2. Never commit, tag, push, rewrite history, or publish a release without
+   explicit user authority.
+3. Never force-push unless explicitly requested and the active policy permits
+   it.
+4. Stop on unrelated dirty changes. Never stage files outside the approved
+   change.
+5. Review the staged diff before every commit.
+6. Verify required tests and checks before claiming a commit or release is
+   ready.
+7. Never commit secrets, credentials, private keys, `.env` files, build output,
+   dependency caches, or editor-specific files unless the repository explicitly
+   requires them.
+8. Keep behavior changes, refactors, formatting, generated output, and
+   dependency updates separate when that improves reviewability or rollback.
+9. Commit and PR size are judgment calls, not line-count targets. Split work by
+   coherent behavior, ownership, risk, and reviewability.
+10. Do not invent a trunk-based workflow, branch prefix, Conventional Commit
+    format, SemVer policy, or changelog structure when the repository already
+    defines a different contract.
 
-```
-Work pattern:
-  Implement slice -> Test -> Verify -> Commit -> Next slice
-```
+## Commit discipline
 
-### 2. Atomic Commits
+### Understand the intended history
 
-Each commit does one logical thing:
+Before committing:
 
-```
-# Good
-a1b2c3d Add task creation endpoint with validation
-d4e5f6g Add task creation form component
-h7i8j9k Connect form to API and add loading state
-m1n2o3p Add task creation tests
+- inspect the complete working-tree and staged diffs;
+- identify unrelated or accidental changes;
+- determine the repository's commit-message convention;
+- group changes by coherent purpose and rollback boundary;
+- verify generated files against their authoritative sources.
 
-# Bad
-x1y2z3a Add task feature, fix sidebar, update deps, refactor utils
-```
+### Atomic commits
 
-### 3. Descriptive Messages
+Each commit should represent one reviewable, reversible unit of intent.
 
-```
+Good separation commonly includes:
+
+- behavior change and its tests;
+- refactor required before the behavior change;
+- generated output associated with its source change;
+- documentation or migration guidance;
+- dependency or tooling changes.
+
+Do not split mechanically by file count or line count. Do not combine unrelated
+changes merely because they were implemented together.
+
+### Commit messages
+
+Follow the repository's existing convention. When no convention exists, use:
+
+```text
 <type>: <short description>
 
-<optional body explaining why, not what>
+<optional body explaining intent, trade-offs, and user impact>
 ```
 
-Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
+Common types include `feat`, `fix`, `refactor`, `test`, `docs`, `build`, and
+`chore`, but repository-defined types take precedence.
 
-```
-# Good: Explains intent
-feat: add email validation to registration endpoint
+Messages should explain why the change exists and what observable outcome it
+creates. Avoid messages such as `fix`, `update`, `misc`, or filenames alone.
 
-Prevents invalid email formats from reaching the database.
-Uses Zod schema validation at the route handler level,
-consistent with existing validation patterns in auth.ts.
+### Pre-commit verification
 
-# Bad
-update auth.ts
-```
+At minimum:
 
-### 4. Keep Concerns Separate
+- inspect `git diff --staged`;
+- verify no unrelated paths are staged;
+- scan the staged diff for secrets and credentials;
+- run the repository's required focused and full checks;
+- confirm generated files and lockfiles are intentional;
+- confirm the commit message matches the actual staged change.
 
-Don't combine formatting with behavior changes. Don't combine refactors with features.
+## Branch discipline
 
-```
-# Good: Separate concerns
-git commit -m "refactor: extract validation logic to shared utility"
-git commit -m "feat: add phone number validation to registration"
-```
+Follow repository conventions for branch names and integration strategy.
 
-### 5. Size Your Changes
+When no convention exists:
 
-Target ~100 lines per commit/PR. Changes over ~1000 lines should be split.
+- use short-lived branches scoped to one coherent outcome;
+- choose a descriptive prefix such as `feat/`, `fix/`, `refactor/`, or `chore/`;
+- avoid long-lived branches that accumulate unrelated changes;
+- prefer feature flags when incomplete work must integrate safely.
 
-```
-~100 lines  -> Easy to review, easy to revert
-~300 lines  -> Acceptable for a single logical change
-~1000 lines -> Split into smaller changes
-```
+Do not assume the default branch is named `main`; detect it.
 
-## Branching Strategy
+This section does not own PR branch updates or conflict resolution. When a
+branch is attached to a GitHub PR, `shipping-github` is authoritative.
 
-### Feature Branches
+## Semantic versioning
 
-```
-main (always deployable)
-  |
-  |-- feature/task-creation    <- one feature per branch
-  |-- feature/user-settings    <- parallel work
-  +-- fix/duplicate-tasks      <- bug fixes
-```
+First determine whether the project actually uses Semantic Versioning and where
+its public compatibility contract is defined.
 
-Branch naming: `feature/<short-description>`, `fix/<short-description>`, `chore/<short-description>`, `refactor/<short-description>`
+When SemVer applies:
 
-## The Save Point Pattern
-
-```
-Agent starts work
-    |
-    |-- Makes a change
-    |   |-- Test passes? -> Commit -> Continue
-    |   +-- Test fails? -> Revert to last commit -> Investigate
-    |
-    +-- Feature complete -> All commits form a clean history
+```text
+MAJOR  incompatible public behavior or API change
+MINOR  backward-compatible functionality
+PATCH  backward-compatible correction
 ```
 
-`git reset --hard HEAD` takes you back to the last successful state.
+Assess compatibility from the consumer's perspective, including APIs, schemas,
+CLI behavior, configuration, persistence, events, generated output, and
+documented guarantees.
 
-## Change Summaries
+Do not automatically choose MAJOR merely because uncertainty exists. Investigate
+the observable contract and clearly report unresolved compatibility risk.
 
-After any modification, provide a structured summary:
+Update every authoritative version surface required by the repository. Do not
+hand-edit generated or derived versions when automation owns them.
 
-```
+## Release tags
+
+Before tagging:
+
+- verify the target commit;
+- verify required release checks;
+- verify the version and tag format;
+- confirm the tag does not already exist locally or remotely;
+- confirm changelog and migration guidance are complete;
+- obtain explicit authority to create and push the tag.
+
+Use annotated tags when the repository expects them.
+
+Do not push a tag or publish a release merely because a tag was prepared.
+
+## Changelog authoring
+
+A changelog is curated consumer-facing release information, not a raw commit
+log.
+
+Follow the existing project format. When no format exists, group entries under
+relevant headings such as:
+
+- Added
+- Changed
+- Fixed
+- Deprecated
+- Removed
+- Security
+
+Describe observable impact. Include migration instructions for breaking changes
+and meaningful deprecations. Avoid implementation details that do not affect
+consumers.
+
+Write changelog content while the behavior and impact are still understood, but
+do not publish or commit it without authority.
+
+## Change summary
+
+After modifying commit, versioning, tag, or changelog artifacts, report:
+
+```text
 CHANGES MADE:
-- src/routes/tasks.ts: Added validation middleware to POST endpoint
-- src/lib/validation.ts: Added TaskCreateSchema using Zod
+- <path or Git object>: <what changed and why>
 
-THINGS I DIDN'T TOUCH (intentionally):
-- src/routes/auth.ts: Has similar validation gap but out of scope
-- src/middleware/error.ts: Error format could be improved (separate task)
+NOT CHANGED:
+- <related item intentionally left untouched>
 
-POTENTIAL CONCERNS:
-- The Zod schema is strict -- rejects extra fields. Confirm this is desired.
-- Added zod as a dependency (72KB gzipped) -- already in package.json
+VERIFICATION:
+- <checks performed and result>
+
+RISKS OR FOLLOW-UPS:
+- <remaining uncertainty or required next action>
 ```
-
-## Pre-Commit Hygiene
-
-```bash
-git diff --staged
-git diff --staged | grep -i "password\|secret\|api_key\|token"
-npm test
-npm run lint
-npx tsc --noEmit
-```
-
-## Handling Generated Files
-
-- Commit: `package-lock.json`, Prisma migrations (project expects them)
-- Don't commit: `dist/`, `.next/`, `.env`, `.env.local`, `*.pem`, IDE config
-- `.gitignore` must cover: `node_modules/`, `dist/`, `.env`, `.env.local`, `*.pem`
-
-## Using Git for Debugging
-
-```bash
-# Find which commit introduced a bug
-git bisect start
-git bisect bad HEAD
-git bisect good <known-good-commit>
-
-# View recent changes
-git log --oneline -20
-git diff HEAD~5..HEAD -- src/
-
-# Find who last changed a specific line
-git blame src/services/task.ts
-
-# Search commit messages
-git log --grep="validation" --oneline
-```
-
-## Release & Versioning
-
-Commits are how you track change; a version is how consumers track it. Once anything depends on your code, "latest on main" stops being a sufficient answer.
-
-### Semantic Versioning
-
-```
-MAJOR  breaking change -- consumers must change their code to upgrade
-MINOR  new functionality, backward-compatible -- safe to upgrade
-PATCH  bug fix, backward-compatible -- safe to upgrade
-```
-
-When unsure whether a change is breaking, assume it is. A surprise major is far cheaper than a broken consumer.
-
-### Tag the Release
-
-```bash
-git tag -a v1.4.0 -m "Release 1.4.0"
-git push origin v1.4.0
-```
-
-Derive the version from the tag rather than hand-editing scattered files.
-
-### Keep a Changelog Written for Humans
-
-A changelog is not `git log`. It is the curated, consumer-facing answer to "what changed and do I care?" -- grouped by `Added / Changed / Fixed / Deprecated / Removed / Security`, newest on top.
-
-```markdown
-## [1.4.0] - 2025-06-12
-### Added
-- Bulk task import via CSV
-### Fixed
-- Timezone drift in recurring task due dates
-### Deprecated
-- `GET /v1/tasks/all` -- use the paginated `GET /v1/tasks` (removal in 2.0)
-```
-
-Write the entry in the same change that makes the change, while the impact is fresh. Breaking changes get a migration note and a deprecation window (see deprecation-and-migration skill).
-
-## Common Rationalizations
-
-| Rationalization | Reality |
-|---|---|
-| "I'll commit when the feature is done" | One giant commit is impossible to review, debug, or revert. |
-| "The message doesn't matter" | Messages are documentation. Future agents and collaborators need them. |
-| "I'll squash it all later" | Squashing destroys the development narrative. Prefer clean incremental commits. |
-| "I don't need a .gitignore" | Until `.env` with production secrets gets committed. Set it up immediately. |
-| "It's just a small fix, bump the patch" | Check what consumers can observe. A behavior change they relied on is a major. |
-| "The changelog is just the commit log" | Commits are for you; the changelog is for consumers. |
-
-## Red Flags
-
-- Large uncommitted changes accumulating
-- Commit messages like "fix", "update", "misc"
-- Formatting changes mixed with behavior changes
-- No `.gitignore` in the project
-- Committing `node_modules/`, `.env`, or build artifacts
-- Long-lived branches that diverge significantly from main
-- Force-pushing to shared branches
-- Breaking change shipped under a minor or patch version bump
-- Release with no tag
-- User-facing release with no changelog entry
 
 ## Verification
 
-For every commit:
-- [ ] Commit does one logical thing
-- [ ] Message explains the why, follows type conventions
-- [ ] Tests pass before committing
-- [ ] No secrets in the diff
-- [ ] No formatting-only changes mixed with behavior changes
-- [ ] `.gitignore` covers standard exclusions
+### Commit
 
-For every release (anything with consumers):
-- [ ] Version bump matches the change: breaking -> major, additive -> minor, fix -> patch
-- [ ] Release is tagged; version derived from tag, not hand-edited
-- [ ] Changelog has a curated, human-readable entry for this version
+- [ ] Staged diff contains only the intended coherent change.
+- [ ] Commit message follows repository conventions and explains intent.
+- [ ] Required tests and checks pass.
+- [ ] No secrets or unintended generated files are present.
+- [ ] No unrelated changes were staged or committed.
+
+### Version or release
+
+- [ ] The repository's versioning policy was identified.
+- [ ] Compatibility impact supports the selected bump.
+- [ ] Every authoritative version surface is consistent.
+- [ ] Required release checks pass.
+- [ ] Changelog and migration guidance match observable impact.
+- [ ] The tag or release action has explicit user authority.
