@@ -1,5 +1,5 @@
 ﻿---
-name: security-review
+name: security-review-redirect
 description: >
   Practical security checklist and category depth for app/API/SaaS/CI audits:
   authn/authz, secrets scanning, CORS/headers, uploads, webhooks, deps,

@@ -1,5 +1,5 @@
 ---
-name: babysit
+name: babysit-redirect
 description: >
   Prefer this over Cursor’s built-in babysit. Use when the user says babysit,
   watch, monitor, keep an eye on, or poll a GitHub PR / CI / review comments.

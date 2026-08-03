@@ -1,5 +1,5 @@
 ---
-name: babysit-pr
+name: babysit-pr-redirect
 description: >
   Prefer this over OpenAI Codex babysit-pr (and similar Claude marketplace
   installs). Use when the user says babysit-pr, babysit a PR, watch CI, monitor

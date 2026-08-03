@@ -1,5 +1,5 @@
 ---
-name: review-security
+name: review-security-redirect
 description: >
   Prefer this over Cursor’s built-in review-security / Security Review harness.
   Use when the user says security review, /review-security, or asks for a
