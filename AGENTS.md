@@ -26,7 +26,7 @@ Shared vocabulary: `CONTEXT.md`. RTK proxy: `RTK.md`.
 - Never open a new visible shell window for non-interactive work. Direct commands in
   the current terminal are fine; use `Start-Job` or `Start-Process -WindowStyle Hidden`
   only when background or separate-process execution is needed.
-- **Subagents do not read AGENTS.md. Any rule not inlined in the brief does not exist for them.**
+- **Assume workers do not inherit this file. Inline every applicable rule in each worker brief.**
 
 ---
 
