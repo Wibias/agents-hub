@@ -143,6 +143,75 @@ Severity (Critical/High/Medium/Low/Info) and confidence are independent. A High-
 
 Env vars, process config, build-time constants, operator-only admin config files — not request params/body/headers/URL/path, uploaded files, webhook payloads, or LLM/tool arguments from users.
 
+#### Gate 0 — impact bar before any Confirmed finding
+
+Every lead must pass all three before it can be Confirmed (else Needs
+verification / residual):
+
+1. **What can the attacker do right now?** Specific: "an unauthenticated user
+   can read any tenant's order" — not "could lead to...".
+2. **What does the victim lose?** Concrete, attributable: financial loss, data
+   exposure, privilege, service abuse.
+3. **Reproduce in 10 minutes from scratch?** Documented steps from a fresh
+   state that reach the impact end-to-end.
+
+#### Reachability and exploitability labels (every security finding)
+
+Required on every security finding, before severity:
+
+- **Reachability:** `EXTERNAL` (unauthenticated input), `AUTHENTICATED`
+  (valid session required), `INTERNAL` (internal/admin only), `UNREACHABLE`
+  (dead code — not a Confirmed finding).
+- **Exploitability:** `EASY` (standard technique, no special conditions),
+  `MEDIUM` (specific conditions, timing, or chaining required), `HARD`
+  (insider knowledge, rare conditions).
+- Confirmed **Critical/High** security findings also carry a **CVSS 3.1
+  vector + score** and a benign **PoC sketch** (payload / request / expected /
+  actual) in chat — never on the public comment.
+
+#### Layer-ordering trap (auth-bypass false positives)
+
+A validation-shaped error (`400 field X is required`) does **not** prove the
+request passed authentication — parsers/sanitizers often run before auth
+middleware. Probe auth with the **simplest well-formed body** the endpoint
+accepts (`{}`), not a malformed one. If the error names an input-shape or
+character-class problem, you are talking to a parser, not business logic. The
+same applies to WAF/CDN blocks: an edge block is not an origin response.
+
+#### Chain-required classes
+
+These are **not** Confirmed standalone — they need a proven end-to-end chain:
+open redirect alone, SSRF with DNS-only callback, host-header injection
+without password-reset poisoning, missing CSP/HSTS/security headers alone,
+missing `HttpOnly`/`Secure` cookie flags alone, clickjacking on non-sensitive
+pages, CORS wildcard without credential-exfiltration PoC, logout CSRF,
+self-XSS, rate limiting on non-critical forms. Chain first (§ Chain analysis),
+then file with the chain's severity.
+
+#### Chain analysis — escalate before assigning severity
+
+After any Confirmed finding, check the A→B→C table before final severity:
+
+| Found A | Check B | Also C |
+| --- | --- | --- |
+| IDOR on one endpoint | Same IDOR on sibling verbs/paths | Old API versions / mobile API |
+| Auth bypass on one endpoint | Every sibling in the same controller | Old API version |
+| Stored XSS | Does an admin view it? (privilege escalation) | Email/export/PDF rendering |
+| SSRF (DNS-only) | Internal services / cloud metadata (169.254.169.254, 10.x) | SSRF via open redirect |
+| OAuth missing PKCE | CSRF on the OAuth flow (state param) | Auth-code replay |
+| Open redirect | OAuth `redirect_uri` code theft | Phishing chain |
+| Race on one primitive | Race on wallet/credits/rate limits | Same pattern in sibling flows |
+| Missing rate limit on OTP | OTP brute force | Password-reset token brute |
+| CSRF on sensitive action | XSS→CSRF escalation | Form autosubmit variants |
+| Leaked API key in JS | What can that key do? | Other keys in the same bundle |
+| Webhook no HMAC | Replay unmodified webhook | Fake success notification |
+
+Rules: confirm A is real first (exact request + response); B must be a
+**different** bug (different endpoint, mechanism, or impact); time-box B/C
+hunting (~20 min per candidate); if B is not confirmed, file A with its true
+severity and move on. Severity reflects the best **confirmed** chain, never a
+hypothetical one.
+
 ### 6. Pass gate (shipping decision)
 
 | Decision | Allowed only when |

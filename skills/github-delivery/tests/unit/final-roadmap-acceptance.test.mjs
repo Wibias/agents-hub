@@ -186,6 +186,47 @@ test("full review refuses to stop while its verdict plan item is pending", () =>
   );
 });
 
+test("full review cannot complete via chat after self-selecting read-only", () => {
+  const skill = readFileSync(
+    new URL("../../SKILL.md", import.meta.url),
+    "utf8",
+  );
+  const sharedRules = readFileSync(
+    new URL("../../references/shared-rules.md", import.meta.url),
+    "utf8",
+  );
+  const fullReview = readFileSync(
+    new URL("../../references/full-review-pr.md", import.meta.url),
+    "utf8",
+  );
+  const mutationModes = readFileSync(
+    new URL("../../references/mutation-modes.md", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(skill, /verify-verdict-published\.mjs/);
+  assert.match(
+    skill,
+    /self-selected stricter mutation mode is not publication unavailability/i,
+  );
+
+  assert.match(sharedRules, /verify-verdict-published\.mjs/);
+  assert.match(sharedRules, /published: true` is the only normal completion proof/);
+  assert.match(sharedRules, /self-selected stricter mutation mode/i);
+  assert.match(
+    sharedRules,
+    /not publication unavailability/i,
+  );
+
+  assert.match(fullReview, /--workflow references\/full-review-pr\.md/);
+  assert.match(fullReview, /`published: true` is required/);
+  assert.match(fullReview, /verify-verdict-published\.mjs/);
+  assert.match(fullReview, /only chat-only completion\s+path/);
+
+  assert.match(mutationModes, /## Router authority/);
+  assert.match(mutationModes, /rejects incompatible combinations/);
+});
+
 test("new full-review runs publish new immutable verdict comments", () => {
   const skill = readFileSync(
     new URL("../../SKILL.md", import.meta.url),
@@ -456,4 +497,31 @@ test("ship-gate snapshot does not request org-scoped reviewer identities through
   assert.match(source, /pulls\/\$\{pr\}\/requested_reviewers/);
   assert.match(source, /users/);
   assert.match(source, /teams/);
+});
+
+test("full-review verdict comments lead with a TLDR and keep the full verdict in a dropdown", () => {
+  const commentDepth = readFileSync(
+    new URL("../../references/comment-depth.md", import.meta.url),
+    "utf8",
+  );
+  const fullReview = readFileSync(
+    new URL("../../references/full-review-pr.md", import.meta.url),
+    "utf8",
+  );
+
+  const tldr = commentDepth.indexOf("### TLDR");
+  const summary = commentDepth.indexOf("<summary><b>Full verdict</b></summary>");
+  const semantic = commentDepth.indexOf("### Semantic propagation");
+  const close = commentDepth.lastIndexOf("</details>");
+
+  assert.ok(tldr >= 0, "verdict template must lead with a TLDR section");
+  assert.ok(summary > tldr, "full verdict must follow the TLDR inside a details block");
+  assert.ok(semantic > summary, "full verdict sections must stay inside the details block");
+  assert.ok(close > semantic, "the details block must close after the full verdict");
+  assert.match(
+    commentDepth,
+    /The TLDR never drops a blocker, owner action, or required next step/,
+  );
+  assert.match(fullReview, /lead with the \*\*TLDR\*\*/);
+  assert.match(fullReview, /<details>/);
 });
