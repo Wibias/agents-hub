@@ -8,6 +8,7 @@ import {
   buildThankRequest,
   defaultThanksBody,
   detectMergeMethod,
+  executeMergeTransaction,
 } from "../../scripts/merge-pr-driver.mjs";
 
 const HEAD = "a93fc4ac8773de2533707c4a08ee8fc1fcec69de";
@@ -80,19 +81,26 @@ test("merge driver gate blocks on required-check pending", () => {
   assert.ok(gate.blockers.some((blocker) => blocker.includes("requiredChecks")));
 });
 
-test("merge driver buildThankRequest produces an idempotent post_comment plan", () => {
+test("merge driver buildThankRequest produces a remotely idempotent post_comment plan", () => {
+  const visibleBody = "Thanks @alice - merged successfully.";
   const request = buildThankRequest({
     repo: "acme/widget",
     pr: 42,
     expectedHead: HEAD,
-    body: "Thanks @alice - merging.",
+    body: visibleBody,
   });
   const plan = planMutationRequest(request);
   assert.equal(plan.action, "post_comment");
   assert.equal(plan.idempotencyKey, "merge-thanks-pr-42");
   assert.equal(plan.expectedHead, HEAD);
   assert.deepEqual(plan.command.slice(0, 3), ["gh", "pr", "comment"]);
-  assert.ok(plan.command.includes("Thanks @alice - merging."));
+  const bodyIndex = plan.command.indexOf("--body") + 1;
+  assert.ok(bodyIndex > 0);
+  assert.match(plan.command[bodyIndex], /^Thanks @alice - merged successfully\./);
+  assert.match(
+    plan.command[bodyIndex],
+    /<!-- github-delivery:idempotency [0-9a-f]{64} -->$/,
+  );
 });
 
 test("merge driver buildMergeRequest pins the head with --match-head-commit", () => {
@@ -117,9 +125,79 @@ test("merge driver buildMergeRequest pins the head with --match-head-commit", ()
   ]);
 });
 
-test("merge driver defaults to merge commits and builds a thanks body", () => {
+test("merge driver defaults to merge commits and builds a post-merge thanks body", () => {
   assert.equal(detectMergeMethod(), "merge");
   const body = defaultThanksBody({ author: "alice", repo: "acme/widget", pr: 42, title: "Test PR" });
   assert.match(body, /@alice/);
-  assert.match(body, /merging/);
+  assert.match(body, /merged/i);
+  assert.doesNotMatch(body, /merging this/i);
+});
+
+test("merge transaction executes the merge before the social thank-you", () => {
+  const calls = [];
+  const receipts = executeMergeTransaction({
+    mergeRequest: { action: "merge_pr" },
+    thankRequest: { action: "post_comment" },
+    executeRequest(request) {
+      calls.push(request.action);
+      return { action: request.action, status: "succeeded" };
+    },
+  });
+  assert.deepEqual(calls, ["merge_pr", "post_comment"]);
+  assert.deepEqual(
+    receipts.map((item) => item.name),
+    ["merge", "post_merge_thanks"],
+  );
+});
+
+test("merge transaction never posts thanks when the merge fails", () => {
+  const calls = [];
+  assert.throws(
+    () =>
+      executeMergeTransaction({
+        mergeRequest: { action: "merge_pr" },
+        thankRequest: { action: "post_comment" },
+        executeRequest(request) {
+          calls.push(request.action);
+          if (request.action === "merge_pr") throw new Error("merge failed");
+          return { action: request.action, status: "succeeded" };
+        },
+      }),
+    /merge failed/,
+  );
+  assert.deepEqual(calls, ["merge_pr"]);
+});
+
+test("merge method detection follows squash-only repository capabilities", () => {
+  assert.equal(
+    detectMergeMethod({
+      mergeCommitAllowed: false,
+      squashMergeAllowed: true,
+      rebaseMergeAllowed: false,
+    }),
+    "squash",
+  );
+});
+
+test("merge method detection follows rebase-only repository capabilities", () => {
+  assert.equal(
+    detectMergeMethod({
+      mergeCommitAllowed: false,
+      squashMergeAllowed: false,
+      rebaseMergeAllowed: true,
+    }),
+    "rebase",
+  );
+});
+
+test("merge method detection fails closed when the repository exposes no merge method", () => {
+  assert.throws(
+    () =>
+      detectMergeMethod({
+        mergeCommitAllowed: false,
+        squashMergeAllowed: false,
+        rebaseMergeAllowed: false,
+      }),
+    /repository_has_no_enabled_merge_method/,
+  );
 });

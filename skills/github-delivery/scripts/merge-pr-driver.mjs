@@ -13,6 +13,7 @@
  * --execute performs the writes through the broker only after the gate is
  * ready on the pinned head. Never merges when blocked or head-mismatched.
  */
+import { spawnSync } from "node:child_process";
 import { appendFileSync, realpathSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
@@ -99,7 +100,7 @@ export function buildGateOutput(snapshot, mode) {
 }
 
 export function defaultThanksBody({ author, repo, pr, title }) {
-  return `Thanks @${author} - merging this. This PR addresses the tracked work cleanly and has passed the full review + CI bar on the current head. Ship it.`;
+  return `Thanks @${author} - merged successfully. This PR addresses the tracked work cleanly and passed the full review + CI bar on the merged head.`;
 }
 
 export function buildThankRequest({ repo, pr, expectedHead, body }) {
@@ -129,14 +130,71 @@ export function buildMergeRequest({ repo, pr, expectedHead, mergeMethod }) {
   };
 }
 
-export function detectMergeMethod() {
-  return "merge";
+export function executeMergeTransaction({
+  mergeRequest,
+  thankRequest = null,
+  executeRequest = (request) => executeMutationRequest({ request, execute: true }),
+} = {}) {
+  if (!mergeRequest) throw new Error("merge_request_required");
+  const receipts = [];
+  const mergeReceipt = executeRequest(mergeRequest);
+  receipts.push({ name: "merge", receipt: mergeReceipt });
+  if (thankRequest) {
+    const thankReceipt = executeRequest(thankRequest);
+    receipts.push({ name: "post_merge_thanks", receipt: thankReceipt });
+  }
+  return receipts;
+}
+
+function booleanCapability(capabilities, camel, snake) {
+  if (capabilities?.[camel] === true || capabilities?.[snake] === true) return true;
+  if (capabilities?.[camel] === false || capabilities?.[snake] === false) return false;
+  return null;
+}
+
+export function detectMergeMethod(capabilities = null) {
+  if (!capabilities) return "merge";
+  const candidates = [
+    ["merge", booleanCapability(capabilities, "mergeCommitAllowed", "allow_merge_commit")],
+    ["squash", booleanCapability(capabilities, "squashMergeAllowed", "allow_squash_merge")],
+    ["rebase", booleanCapability(capabilities, "rebaseMergeAllowed", "allow_rebase_merge")],
+  ];
+  const enabled = candidates.filter(([, allowed]) => allowed === true).map(([method]) => method);
+  if (!enabled.length) {
+    throw new Error("repository_has_no_enabled_merge_method");
+  }
+  return enabled[0];
+}
+
+export function readRepositoryMergeCapabilities(
+  repo,
+  runner = (command, args, options) => spawnSync(command, args, options),
+) {
+  const result = runner("gh", ["api", `repos/${repo}`], {
+    encoding: "utf8",
+    maxBuffer: 20 * 1024 * 1024,
+  });
+  if (result.status !== 0) {
+    const detail = String(result.stderr || result.stdout || "").trim();
+    throw new Error(detail || `repository_capabilities_failed:${result.status}`);
+  }
+  let payload;
+  try {
+    payload = JSON.parse(String(result.stdout || ""));
+  } catch {
+    throw new Error("repository_capabilities_invalid_json");
+  }
+  return {
+    mergeCommitAllowed: payload.allow_merge_commit === true,
+    squashMergeAllowed: payload.allow_squash_merge === true,
+    rebaseMergeAllowed: payload.allow_rebase_merge === true,
+  };
 }
 
 async function settle({ repo, pr, mode, snapshot, totalMs = 60_000, pollMs = 20_000 }) {
   const deadline = Date.now() + totalMs;
   let gate = buildGateOutput(snapshot, mode);
-  let lastHead = snapshot.headOid;
+  const lastHead = snapshot.headOid;
   while (Date.now() < deadline) {
     await new Promise((resolve) => setTimeout(resolve, pollMs));
     const fresh = captureLiveSnapshot({ repo, pr });
@@ -188,7 +246,8 @@ async function main() {
   }
 
   const expectedHead = snapshot.headOid;
-  const mergeMethod = args.mergeMethod || detectMergeMethod();
+  const mergeMethod =
+    args.mergeMethod || detectMergeMethod(readRepositoryMergeCapabilities(args.repo));
   const authorLogin = pr.author?.login || null;
   const thankBody =
     args.thankComment ||
@@ -196,17 +255,19 @@ async function main() {
       ? defaultThanksBody({ author: authorLogin, repo: args.repo, pr: args.pr, title: pr.title })
       : null);
 
-  const requests = [];
-  if (thankBody) {
-    requests.push({
-      name: "pre_merge_thanks",
-      request: buildThankRequest({ repo: args.repo, pr: args.pr, expectedHead, body: thankBody }),
-    });
-  }
-  requests.push({
-    name: "merge",
-    request: buildMergeRequest({ repo: args.repo, pr: args.pr, expectedHead, mergeMethod }),
+  const mergeRequest = buildMergeRequest({
+    repo: args.repo,
+    pr: args.pr,
+    expectedHead,
+    mergeMethod,
   });
+  const thankRequest = thankBody
+    ? buildThankRequest({ repo: args.repo, pr: args.pr, expectedHead, body: thankBody })
+    : null;
+  const requests = [
+    { name: "merge", request: mergeRequest },
+    ...(thankRequest ? [{ name: "post_merge_thanks", request: thankRequest }] : []),
+  ];
 
   const plans = requests.map(({ name, request }) => ({
     name,
@@ -242,14 +303,17 @@ async function main() {
     return;
   }
 
-  const receipts = [];
-  for (const { name, request } of requests) {
-    const receipt = executeMutationRequest({ request, execute: true });
-    receipts.push({ name, receipt });
-    if (args.audit) {
-      appendFileSync(args.audit, `${JSON.stringify(receipt)}\n`, "utf8");
-    }
-  }
+  const receipts = executeMergeTransaction({
+    mergeRequest,
+    thankRequest,
+    executeRequest(request) {
+      const receipt = executeMutationRequest({ request, execute: true });
+      if (args.audit) {
+        appendFileSync(args.audit, `${JSON.stringify(receipt)}\n`, "utf8");
+      }
+      return receipt;
+    },
+  });
 
   const merged = receipts.find((item) => item.name === "merge")?.receipt;
   const cleanup = evaluateHeadBranchCleanup({

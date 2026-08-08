@@ -14,6 +14,8 @@ const PR_ACTIONS = new Set([
   "resolve_bot_thread",
   "change_draft_state",
   "request_reviewers",
+  "close_pr",
+  "supersede_pr",
   "merge_pr",
   "post_resolution_record",
 ]);
@@ -25,11 +27,23 @@ const SOCIAL_ACTIONS = new Set([
   "edit_own_comment",
   "reply_bot_thread",
   "reply_human_thread",
+  "supersede_pr",
+  "create_follow_up_issue",
+  "post_resolution_record",
+]);
+
+const REMOTE_IDEMPOTENT_CREATE_ACTIONS = new Set([
+  "post_review",
+  "post_comment",
+  "post_issue_comment",
+  "reply_bot_thread",
+  "reply_human_thread",
   "create_follow_up_issue",
   "post_resolution_record",
 ]);
 
 const CLEANUP_ACTIONS = new Set(["delete_head_branch"]);
+const IDEMPOTENCY_MARKER_RE = /\n\n<!-- github-delivery:idempotency [0-9a-f]{64} -->\s*$/i;
 
 function sha256(value) {
   return createHash("sha256").update(String(value ?? ""), "utf8").digest("hex");
@@ -40,6 +54,10 @@ function required(value, name) {
     throw new Error(`${name}_required`);
   }
   return value;
+}
+
+export function idempotencyMarker(key) {
+  return `<!-- github-delivery:idempotency ${sha256(required(key, "idempotency_key"))} -->`;
 }
 
 function positiveInteger(value, name) {
@@ -63,6 +81,15 @@ function branchRefPath(branch) {
     .split("/")
     .map((segment) => encodeURIComponent(segment))
     .join("/");
+}
+
+function visibleBody(value) {
+  return String(value ?? "").replace(IDEMPOTENCY_MARKER_RE, "");
+}
+
+function bodyWithIdempotencyMarker(body, marker) {
+  const clean = visibleBody(required(body, "body")).trimEnd();
+  return `${clean}\n\n${marker}`;
 }
 
 function commandFor(request) {
@@ -195,6 +222,35 @@ function commandFor(request) {
       }
       return command;
     }
+    case "close_pr":
+      return [
+        "gh",
+        "pr",
+        "close",
+        String(positiveInteger(request.pr, "pr")),
+        "--repo",
+        repo,
+      ];
+    case "supersede_pr": {
+      const command = [
+        "gh",
+        "pr",
+        "close",
+        String(positiveInteger(request.pr, "pr")),
+        "--repo",
+        repo,
+      ];
+      let body;
+      if (request.body) {
+        body = required(request.body, "body");
+      } else if (request.supersedingPr) {
+        body = `Superseded by PR #${positiveInteger(request.supersedingPr, "superseding_pr")}.`;
+      } else {
+        throw new Error("body_or_superseding_pr_required");
+      }
+      command.push("--comment", body);
+      return command;
+    }
     case "close_linked_issue":
       return [
         "gh",
@@ -246,6 +302,32 @@ function runOrThrow(runner, command) {
   return String(result.stdout || "").trim();
 }
 
+function parseJson(output, errorCode) {
+  try {
+    const value = JSON.parse(output);
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      throw new Error("not_object");
+    }
+    return value;
+  } catch {
+    throw new Error(errorCode);
+  }
+}
+
+function parseSlurpedCollection(output) {
+  let payload;
+  try {
+    payload = JSON.parse(output || "[]");
+  } catch {
+    throw new Error("idempotency_lookup_invalid_json");
+  }
+  if (!Array.isArray(payload)) throw new Error("idempotency_lookup_invalid_payload");
+  return payload.flatMap((page) => {
+    if (Array.isArray(page)) return page;
+    return page && typeof page === "object" ? [page] : [];
+  });
+}
+
 function verifyHead({ request, runner }) {
   if (!PR_ACTIONS.has(request.action)) return null;
   const expectedHead = required(request.expectedHead, "expected_head");
@@ -269,6 +351,76 @@ function verifyHead({ request, runner }) {
   return output;
 }
 
+function verifyOwnCommentTarget({ request, runner }) {
+  if (request.action !== "edit_own_comment") return null;
+  const repo = required(request.repo, "repo");
+  const { owner, name } = repoParts(repo);
+  const pr = positiveInteger(request.pr, "pr");
+  const commentId = positiveInteger(request.commentId, "comment_id");
+
+  const viewer = parseJson(
+    runOrThrow(runner, ["gh", "api", "user"]),
+    "viewer_evidence_invalid",
+  );
+  const actorLogin = required(viewer.login, "viewer_login");
+  const comment = parseJson(
+    runOrThrow(runner, [
+      "gh",
+      "api",
+      `repos/${owner}/${name}/issues/comments/${commentId}`,
+    ]),
+    "comment_evidence_invalid",
+  );
+  const commentLogin = required(comment.user?.login, "comment_author_login");
+  if (String(commentLogin).toLowerCase() !== String(actorLogin).toLowerCase()) {
+    throw new Error("comment_not_owned_by_actor");
+  }
+
+  const issueUrl = required(comment.issue_url, "comment_issue_url");
+  const expectedSuffix = `/repos/${owner}/${name}/issues/${pr}`.toLowerCase();
+  if (!String(issueUrl).toLowerCase().endsWith(expectedSuffix)) {
+    throw new Error("comment_target_mismatch");
+  }
+
+  return { actorLogin, commentId, issueUrl };
+}
+
+function idempotencyLookupPath(request) {
+  if (!REMOTE_IDEMPOTENT_CREATE_ACTIONS.has(request.action)) return null;
+  const { owner, name } = repoParts(required(request.repo, "repo"));
+  switch (request.action) {
+    case "post_comment":
+    case "post_resolution_record":
+      return `repos/${owner}/${name}/issues/${positiveInteger(request.pr, "pr")}/comments?per_page=100`;
+    case "post_issue_comment":
+      return `repos/${owner}/${name}/issues/${positiveInteger(request.issue, "issue")}/comments?per_page=100`;
+    case "post_review":
+      return `repos/${owner}/${name}/pulls/${positiveInteger(request.pr, "pr")}/reviews?per_page=100`;
+    case "reply_bot_thread":
+    case "reply_human_thread":
+      return `repos/${owner}/${name}/pulls/${positiveInteger(request.pr, "pr")}/comments?per_page=100`;
+    case "create_follow_up_issue":
+      return `repos/${owner}/${name}/issues?state=all&per_page=100`;
+    default:
+      return null;
+  }
+}
+
+function findExistingIdempotentMutation({ request, runner }) {
+  const path = idempotencyLookupPath(request);
+  if (!path) return null;
+  const marker = required(request.idempotencyMarker, "idempotency_marker");
+  const output = runOrThrow(runner, ["gh", "api", path, "--paginate", "--slurp"]);
+  const records = parseSlurpedCollection(output);
+  const existing = records.find((record) => String(record?.body || "").includes(marker));
+  if (!existing) return null;
+  return {
+    id: existing.id ?? existing.number ?? null,
+    number: existing.number ?? null,
+    url: existing.html_url || existing.url || null,
+  };
+}
+
 function verifyBranchDeleted({ request, runner }) {
   if (request.action !== "delete_head_branch") return null;
   const targetRepo = required(request.targetRepo || request.repo, "target_repo");
@@ -286,7 +438,8 @@ function verifyBranchDeleted({ request, runner }) {
     throw new Error("branch_still_exists");
   }
   const detail = String(result.stderr || result.stdout || "").toLowerCase();
-  if (!detail.includes("404") && result.status !== 1) {
+  const confirmedNotFound = detail.includes("404") || detail.includes("not found");
+  if (!confirmedNotFound) {
     throw new Error(`branch_delete_verification_failed:${result.status}`);
   }
   return "deleted";
@@ -304,6 +457,18 @@ function verificationCommand(request) {
         request.repo,
         "--json",
         "state,mergedAt,headRefOid",
+      ];
+    case "close_pr":
+    case "supersede_pr":
+      return [
+        "gh",
+        "pr",
+        "view",
+        String(request.pr),
+        "--repo",
+        request.repo,
+        "--json",
+        "state,closedAt",
       ];
     case "close_linked_issue":
       return [
@@ -384,12 +549,17 @@ export function planMutationRequest(request = {}) {
     required(request.idempotencyKey, "idempotency_key");
   }
   if (request.action === "reply_human_thread") {
-    const actualHash = sha256(required(request.body, "body"));
+    const actualHash = sha256(required(visibleBody(request.body), "body"));
     if (request.exactTextSha256 !== actualHash) {
       throw new Error("exact_text_hash_mismatch");
     }
   }
   const normalized = structuredClone(request);
+  if (REMOTE_IDEMPOTENT_CREATE_ACTIONS.has(normalized.action)) {
+    const marker = idempotencyMarker(normalized.idempotencyKey);
+    normalized.idempotencyMarker = marker;
+    normalized.body = bodyWithIdempotencyMarker(normalized.body, marker);
+  }
   if (normalized.action === "delete_head_branch") {
     const decision = assertDeleteHeadBranchAllowed(normalized);
     normalized.targetRepo = decision.targetRepo;
@@ -407,6 +577,7 @@ export function planMutationRequest(request = {}) {
     pr: normalized.pr ?? null,
     expectedHead: normalized.expectedHead ?? null,
     idempotencyKey: normalized.idempotencyKey ?? null,
+    idempotencyMarker: normalized.idempotencyMarker ?? null,
     authorization,
     command,
   };
@@ -423,6 +594,24 @@ export function executeMutationRequest({
   }
 
   const observedHead = verifyHead({ request: plan.request, runner });
+  const commentEditTarget = verifyOwnCommentTarget({ request: plan.request, runner });
+  const existingMutation = findExistingIdempotentMutation({
+    request: plan.request,
+    runner,
+  });
+  if (existingMutation) {
+    return {
+      ...plan,
+      executed: false,
+      status: "already_applied",
+      observedHead,
+      commentEditTarget,
+      existingMutation,
+      stdout: "",
+      verification: null,
+    };
+  }
+
   const stdout = runOrThrow(runner, plan.command);
   const branchDeletion = verifyBranchDeleted({ request: plan.request, runner });
   const verify = verificationCommand(plan.request);
@@ -433,6 +622,8 @@ export function executeMutationRequest({
     executed: true,
     status: "succeeded",
     observedHead,
+    commentEditTarget,
+    existingMutation: null,
     stdout,
     verification,
   };
