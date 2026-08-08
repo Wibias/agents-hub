@@ -14,10 +14,10 @@ Agent vocabulary for this hub. Identity: `SOUL.md`. Routing and policy: `AGENTS.
 
 ## Cross-project terms
 
-| Term | Meaning |
-|------|---------|
-| **Green Gate** | Tests, doctor, and lints green before handoff |
-| **Blast Radius** | How many modules/files a change touches |
-| **Screenshot-Check** | UI is not done until there is live browser proof |
-| **Close the Loop** | Agent verifies output via CLI, tests, or screenshots |
-| **Harness is the model** | System form (rules, hooks, gates) beats a raw model upgrade |
+| Term                     | Meaning                                                   |
+| ------------------------ | --------------------------------------------------------- |
+| **Green Gate**           | Tests, doctor, and lints green before handoff             |
+| **Blast Radius**         | Count of modules/files a change touches                   |
+| **Screenshot-Check**     | UI not done until live browser proof                      |
+| **Close the Loop**       | Agent verifies output via CLI, tests, or screenshots      |
+| **Harness is the model** | System form (rules, hooks, gates) beats raw model upgrade |
