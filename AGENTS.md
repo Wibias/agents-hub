@@ -30,6 +30,18 @@ Shared vocabulary: `CONTEXT.md`. RTK proxy: `RTK.md`.
 
 ---
 
+## Worktrees
+
+- All git worktrees live under `D:\codex-worktrees\` — never inside
+  `C:\Users\ws\Desktop\Anderes\GitHub`, inside a repository checkout, or in `C:\tmp`.
+  D: has the space; C: is constrained.
+- One task = one folder = one branch = one agent; folder name = branch/task name.
+- Use `git worktree add "D:\codex-worktrees\<name>" -b <branch>`. App-managed worktrees
+  should use the same root (Settings → Git → Worktree root; never edit config.toml directly).
+- Inline this rule in every worker brief; workers do not inherit this file.
+
+---
+
 ## Orchestration mode
 
 Break large tasks into bounded work packets. Delegate; synthesize. Spawn subagents when the user requests it or parallelism is clearly beneficial.
@@ -87,27 +99,14 @@ When multiple skills match the same request:
 
 Examples:
 
-- GitHub issue or pull-request work is owned by `shipping-github`.
+- GitHub issue or pull-request work is owned by `github-delivery`.
 - A GitHub PR request containing review, simplify, cleanup, deduplication,
   security review, CI monitoring, comments, or merging starts with
-  `shipping-github/SKILL.md`.
+  `github-delivery/SKILL.md`.
 - For a combined full-review and simplify request,
-  `shipping-github/SKILL.md` decides how simplification is composed.
+  `github-delivery/SKILL.md` decides how simplification is composed.
 - Standalone local code simplification with no GitHub issue or PR lifecycle may
   route directly to `simplify`.
-
-### Capability preflight
-
-Before creating, merging, forking, or substantially expanding a skill, run:
-
-`$env:USERPROFILE\.agents\skills\jk\jk-effective-agent-skills\scripts\capability-preflight.ps1`
-
-The script inventories candidates only. Read the plausible routers it surfaces
-and record the final decision: `REUSE / EXTEND / MERGE / CREATE` with evidence.
-
-`CREATE` is only valid after rejecting plausible matches with evidence. On
-`NO_MATCHES`, inspect at most the top three ranked near-matches before
-`CREATE`. No new skill folder until `CREATE` is justified.
 
 ---
 
